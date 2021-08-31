@@ -103,6 +103,7 @@ end = struct
            ("println", VNative println);
            ("nil", VList []);
            ("true", VSymbol "true");
+           ("otherwise", VSymbol "true");
          ]
 end
 
