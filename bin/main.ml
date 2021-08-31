@@ -55,4 +55,9 @@ end = struct
         | Ok _ -> ())
 end
 
-let () = try Reader.run Sys.argv.(1) with _ -> Repl.run Eval.initial_env
+let get_path () = try Some Sys.argv.(1) with _ -> None
+
+let () =
+  match get_path () with
+  | Some path -> Reader.run path
+  | None -> Repl.run Eval.initial_env
