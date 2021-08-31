@@ -119,7 +119,7 @@ end
 let initial_env = Prelude.env
 
 module State = struct
-  type 't state = State of (env -> (env * 't, string) result)
+  type 'a t = State of (env -> (env * 'a, string) result)
 
   let run (State run) = run
 
@@ -141,11 +141,12 @@ module State = struct
             let (State runState') = f x in
             runState' env))
 
-  (* let ( let+ ) = map *)
+  (* let ( let+ ) state f = map f state *)
 
   let ( let* ) = bind
 
   (* let ( >>= ) = bind *)
+
   let rec traverse f = function
     | [] -> return []
     | x :: xs ->
@@ -183,6 +184,26 @@ and eval_cond =
       let* b_value = eval b in
       if truthy b_value then eval y else eval_cond rest
   | _ -> fail "Uneven clauses in cond"
+
+and eval_application forms =
+  let open State in
+  let* values = traverse eval forms in
+  match values with
+  | [] -> return (VList [])
+  | VLambda (scope_env, params_, body) :: args -> (
+      match zip_params params_ args with
+      | None -> fail @@ arity_error_msg "lambda" args
+      | Some bindings ->
+          let* env = get_env in
+          let env' =
+            StringMap.union (fun _ _ y -> Some y) scope_env env
+            |> bind_all bindings
+          in
+          let* () = put_env env' in
+          eval body)
+  | VNative nf :: args -> (
+      match nf args with Ok r -> return r | Error e -> fail e)
+  | v :: _ -> fail (value_to_string v ^ " is not a function")
 
 and eval expr =
   let open State in
@@ -229,24 +250,24 @@ and eval expr =
               let* env = get_env in
               return @@ VLambda (env, params_, body))
       | _ -> fail "Parsing error in lambda")
-  | List forms -> (
-      let* values = traverse eval forms in
-      match values with
-      | [] -> return (VList [])
-      | VLambda (scope_env, params_, body) :: args -> (
-          match zip_params params_ args with
-          | None -> fail @@ arity_error_msg "lambda" args
-          | Some bindings ->
-              let* env = get_env in
-              let env' =
-                StringMap.union (fun _ _ y -> Some y) scope_env env
-                |> bind_all bindings
-              in
-              let* () = put_env env' in
-              eval body)
-      | VNative nf :: args -> (
-          match nf args with Ok r -> return r | Error e -> fail e)
-      | v :: _ -> fail (value_to_string v ^ " is not a function"))
+  | List (Symbol op :: _args as forms) -> (
+      let* env = get_env in
+      match StringMap.find_opt op env with
+      | Some (Macro (_, _, body)) ->
+          let* value = eval body in
+          macro_expand value
+      | _ -> eval_application forms)
+  | List forms -> eval_application forms
+
+and macro_expand : value -> value State.t =
+  let open State in
+  function
+  | VSymbol s -> eval (Symbol s)
+  | VList values ->
+      let* prova = traverse macro_expand values in
+      let* values = traverse macro_expand values in
+      return (VList values)
+  | e -> return e
 
 let run env expr = State.run (eval expr) env
 
