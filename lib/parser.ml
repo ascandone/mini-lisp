@@ -17,7 +17,7 @@ let pred_or f g x = f x || g x
 
 let is_identifier_char ch =
   match ch with
-  | '*' | '/' | '+' | '!' | '-' | '_' | '?' | '<' | '>' | '=' -> true
+  | '*' | '/' | '+' | '!' | '-' | '_' | '?' | '<' | '>' | '=' | '&' -> true
   | _ -> false
 
 let number_literal =
