@@ -111,7 +111,7 @@ end = struct
 
   let cons = function
     | [ x; List xs ] -> Ok (List (x :: xs))
-    | [ _; _ ] -> Error "the second argument is expected to be a list"
+    | [ _; _ ] -> Error "Cons: the second argument is expected to be a list"
     | args -> Error (arity_error_msg "cons" args)
 
   let isAtom = function
@@ -186,6 +186,13 @@ let parse_file filename =
   close_in ch;
   Parser.run s
 
+let with_env f =
+  let open State in
+  let* backup_env = get_env in
+  let* res = f backup_env in
+  let* () = put_env backup_env in
+  return res
+
 (* TODO reuse eval *)
 let rec quote_value value =
   let open State in
@@ -217,8 +224,8 @@ and eval_application forms =
       match zip_params params_ args with
       | None -> fail @@ arity_error_msg "lambda" args
       | Some bindings ->
-          let* env = get_env in
-          let env' = shadow_env scope_env env |> bind_all bindings in
+          with_env @@ fun env ->
+          let env' = shadow_env env scope_env |> bind_all bindings in
           let* () = put_env env' in
           eval body)
   | Native nf :: args -> (
