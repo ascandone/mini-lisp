@@ -30,6 +30,10 @@ let env_to_string env =
   in
   "{ " ^ body ^ " }"
 
+let arity_error_msg label args =
+  let n = Int.to_string (List.length args) in
+  "Wrong number of args (" ^ n ^ ") passed to " ^ label
+
 let rec pred_all mapper = function
   | [] -> Ok []
   | x :: xs -> (
@@ -43,27 +47,66 @@ let bind_all bindings env =
 
 let truthy = function VSymbol "true" -> true | _ -> false
 
-let prelude =
-  [
-    ( "+",
-      VNative
-        (fun values ->
-          match
-            pred_all (function VNumber s -> Ok s | e -> Error e) values
-          with
-          | Ok nums -> Ok (VNumber (List.fold_left ( +. ) 0. nums))
-          | Error _ -> Error "Sum expects numbers as arguments") );
-    ( "println",
-      VNative
-        (fun values ->
-          values |> List.map value_to_string |> String.concat " "
-          |> print_endline;
-          Ok (VList [])) );
-    ("nil", VList []);
-    ("true", VSymbol "true");
-  ]
+module Prelude : sig
+  val env : env
+end = struct
+  let nil = VList []
 
-let initial_env : env = StringMap.empty |> bind_all prelude
+  let vbool b = if b then VSymbol "true" else nil
+
+  let plus values =
+    match pred_all (function VNumber s -> Ok s | e -> Error e) values with
+    | Ok nums -> Ok (VNumber (List.fold_left ( +. ) 0. nums))
+    | Error _ -> Error "Sum expects numbers as arguments"
+
+  let println values =
+    values |> List.map value_to_string |> String.concat " " |> print_endline;
+    Ok (VList [])
+
+  let eq = function
+    | [ VList []; VList [] ] -> Ok (vbool true)
+    | [ VSymbol x; VSymbol y ] when x = y -> Ok (vbool true)
+    | [ VNumber x; VNumber y ] when x = y -> Ok (vbool true)
+    | [ _; _ ] -> Ok (vbool false)
+    | args -> Error (arity_error_msg "=" args)
+
+  let head = function
+    | [ VList (hd :: _) ] -> Ok hd
+    | [ _ ] -> Ok nil
+    | args -> Error (arity_error_msg "head" args)
+
+  let tail = function
+    | [ VList (_ :: tl) ] -> Ok (VList tl)
+    | [ _ ] -> Ok nil
+    | args -> Error (arity_error_msg "tail" args)
+
+  let cons = function
+    | [ x; VList xs ] -> Ok (VList (x :: xs))
+    | [ _; _ ] -> Error "the second argument is expected to be a list"
+    | args -> Error (arity_error_msg "cons" args)
+
+  let isAtom = function
+    | [ VList [] ] | [ VSymbol _ ] | [ VNumber _ ] -> Ok (vbool true)
+    | [ _ ] -> Ok (vbool false)
+    | args -> Error (arity_error_msg "atom?" args)
+
+  let env =
+    StringMap.empty
+    |> bind_all
+         [
+           ("atom?", VNative isAtom);
+           ("+", VNative plus);
+           ("=", VNative eq);
+           ("head", VNative head);
+           ("tail", VNative tail);
+           ("cons", VNative cons);
+           ("println", VNative println);
+           ("nil", VList []);
+           ("true", VSymbol "true");
+         ]
+end
+
+let initial_env = Prelude.env
 
 module State = struct
   type 't state = State of (env -> (env * 't, string) result)
@@ -108,10 +151,6 @@ let rec zip_params params args =
   | param :: rest_params, arg :: rest_args ->
       zip_params rest_params rest_args
       |> Option.map (fun rest -> (param, arg) :: rest)
-
-let arity_error_msg label args =
-  let n = Int.to_string (List.length args) in
-  "Wrong number of args (" ^ n ^ ") passed to " ^ label
 
 let rec quote_value =
   let open State in
