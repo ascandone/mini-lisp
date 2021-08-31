@@ -5,6 +5,7 @@ type env_item = Value of value | Macro of (env * string list * value)
 and value =
   | Number of float
   | Symbol of string
+  | Char of char
   | List of value list
   | Native of native_function
   | Lambda of (env * string list * value)
@@ -16,17 +17,37 @@ and env = env_item StringMap.t
 let rec lift_sexpr = function
   | Sexpr.Number n -> Number n
   | Sexpr.Symbol s -> Symbol s
+  | Sexpr.Char ch -> Char ch
   | Sexpr.List l -> List (List.map lift_sexpr l)
 
+let rec pred_all mapper = function
+  | [] -> Ok []
+  | x :: xs -> (
+      match mapper x with
+      | Error e -> Error e
+      | Ok x' -> pred_all mapper xs |> Result.map (fun xs' -> x' :: xs'))
+
+let char_list = function
+  | List [] -> None
+  | List exprs -> (
+      match pred_all (function Char s -> Ok s | e -> Error e) exprs with
+      | Ok chars -> Some chars
+      | Error _ -> None)
+  | _ -> None
+
 let rec value_to_string expr =
-  match expr with
-  | Symbol str -> str
-  | Number n -> string_of_float n
-  | List [] -> "nil"
-  | List exprs ->
-      "(" ^ (exprs |> List.map value_to_string |> String.concat " ") ^ ")"
-  | Native _ -> "[[Native function]]"
-  | Lambda _ -> "[[Lambda]]"
+  match char_list expr with
+  | Some chars -> "\"" ^ Utils.string_of_chars chars ^ "\""
+  | _ -> (
+      match expr with
+      | Symbol str -> str
+      | Number n -> string_of_float n
+      | Char ch -> Char.escaped ch
+      | List [] -> "nil"
+      | List exprs ->
+          "(" ^ (exprs |> List.map value_to_string |> String.concat " ") ^ ")"
+      | Native _ -> "[[Native function]]"
+      | Lambda _ -> "[[Lambda]]")
 
 let env_to_string (env : env) =
   let body =
@@ -44,13 +65,6 @@ let env_to_string (env : env) =
 let arity_error_msg label args =
   let n = Int.to_string (List.length args) in
   "Wrong number of args (" ^ n ^ ") passed to " ^ label
-
-let rec pred_all mapper = function
-  | [] -> Ok []
-  | x :: xs -> (
-      match mapper x with
-      | Error e -> Error e
-      | Ok x' -> pred_all mapper xs |> Result.map (fun xs' -> x' :: xs'))
 
 let bind_all bindings env =
   bindings
@@ -170,11 +184,11 @@ let parse_file filename =
   close_in ch;
   Parser.run s
 
-let rec quote_value =
+(* TODO reuse eval *)
+let rec quote_value value =
   let open State in
-  function
-  | Symbol x -> return (Symbol x)
-  | Number x -> return (Number x)
+  match value with
+  | Symbol _ | Number _ | Char _ | Lambda _ | Native _ -> return value
   | List (Symbol "unquote" :: args) -> (
       match args with
       | [ arg ] -> eval arg
@@ -182,7 +196,6 @@ let rec quote_value =
   | List values ->
       let* list = traverse quote_value values in
       return (List list)
-  | _ -> raise Exit
 
 and eval_cond =
   let open State in
@@ -216,9 +229,7 @@ and eval_application forms =
 and eval expr =
   let open State in
   match expr with
-  | Native _ -> return expr
-  | Lambda _ -> return expr
-  | Number n -> return (Number n)
+  | Native _ | Lambda _ | Char _ | Number _ -> return expr
   | Symbol s -> (
       let* env = get_env in
       match StringMap.find_opt s env with

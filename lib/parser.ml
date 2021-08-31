@@ -9,8 +9,6 @@ let whitespace =
   many @@ satisfy
   @@ fun ch -> match ch with ' ' | '\t' | '\n' -> true | _ -> false
 
-let string_of_chars lst = String.of_seq @@ List.to_seq lst
-
 let is_digit ch = match ch with '0' .. '9' -> true | _ -> false
 
 let is_char ch = match ch with 'a' .. 'z' | 'A' .. 'Z' -> true | _ -> false
@@ -25,14 +23,14 @@ let is_identifier_char ch =
 let number =
   (* TODO float *)
   let* integer = many1 @@ satisfy @@ is_digit in
-  try return @@ Number (float_of_string @@ string_of_chars integer)
+  try return @@ Number (float_of_string @@ Utils.string_of_chars integer)
   with _ -> fail "invalid number"
 
 let symbol =
   let is_leading = is_identifier_char |> pred_or is_char in
   let* leading = satisfy is_leading in
   let* rest = many @@ satisfy @@ (is_leading |> pred_or is_digit) in
-  return @@ Symbol (string_of_chars (leading :: rest))
+  return @@ Symbol (Utils.string_of_chars (leading :: rest))
 
 let list_ expr =
   let* _ = string "(" in
@@ -54,10 +52,16 @@ let unquoted expr =
   let* e = expr in
   return @@ List [ Symbol "unquote"; e ]
 
+let ch =
+  let* _ = char '\'' in
+  let* c = any_char in
+  let* _ = char '\'' in
+  return (Char c)
+
 let expr =
   fix @@ fun expr ->
   choice ~failure_msg:"Invalid expression"
-    [ symbol; number; list_ expr; quoted expr; unquoted expr ]
+    [ symbol; number; list_ expr; quoted expr; unquoted expr; ch ]
 
 let parser = whitespace *> sep_by whitespace expr <* whitespace
 
