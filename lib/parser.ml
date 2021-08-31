@@ -20,7 +20,7 @@ let is_identifier_char ch =
   | '*' | '/' | '+' | '!' | '-' | '_' | '?' | '<' | '>' | '=' -> true
   | _ -> false
 
-let number =
+let number_literal =
   (* TODO float *)
   let* integer = many1 @@ satisfy @@ is_digit in
   try return @@ Number (float_of_string @@ Utils.string_of_chars integer)
@@ -52,16 +52,33 @@ let unquoted expr =
   let* e = expr in
   return @@ List [ Symbol "unquote"; e ]
 
-let ch =
+let char_literal =
   let* _ = char '\'' in
   let* c = any_char in
   let* _ = char '\'' in
   return (Char c)
 
+let string_literal =
+  let* _ = char '\"' in
+  let* chars = take_while (( != ) '\"') in
+  let* _ = char '\"' in
+  let lst = chars |> Utils.chars_of_string |> List.map (fun ch -> Char ch) in
+  return @@ List [ Symbol "quote"; List lst ]
+
+(* (List [ Char 'a'; Char 'b' ]) *)
+
 let expr =
   fix @@ fun expr ->
   choice ~failure_msg:"Invalid expression"
-    [ symbol; number; list_ expr; quoted expr; unquoted expr; ch ]
+    [
+      symbol;
+      number_literal;
+      list_ expr;
+      quoted expr;
+      unquoted expr;
+      char_literal;
+      string_literal;
+    ]
 
 let parser = whitespace *> sep_by whitespace expr <* whitespace
 
