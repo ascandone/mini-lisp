@@ -31,7 +31,7 @@ end = struct
     | Ok exprs -> run (evalute_results exprs env)
     | Error e ->
         print_endline ("## Syntax Error: " ^ e);
-        ()
+        run env
 
   and multiline ?(acc = []) env =
     match read_line () with
