@@ -236,10 +236,19 @@ and eval expr =
       | Some (Value value) -> return value
       | Some (Macro (_, _, _)) -> fail "Can't take value of a macro"
       | None -> fail ("unbound value: " ^ s))
-  | List (Symbol "load" :: _args) ->
-      let* _env_backup = get_env in
-      let* _ = eval_file "bin/stdlib.lisp" in
-      return (List [])
+  | List (Symbol "require" :: path_symbol :: _) -> (
+      (* TODO import selection  *)
+      let* path = eval path_symbol in
+      match char_list path with
+      | None ->
+          fail @@ "require path must be a string, got <" ^ value_to_string path
+          ^ "> instead"
+      | Some chars ->
+          let* env_backup = get_env in
+          let* () = put_env initial_env in
+          let* _ = eval_file (Utils.string_of_chars chars) in
+          let* () = put_env env_backup in
+          return (List []))
   | List (Symbol "def" :: args) -> (
       match args with
       | [ Symbol name; form ] ->
