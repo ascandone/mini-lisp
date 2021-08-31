@@ -204,8 +204,20 @@ let rec quote_value value =
       | [ arg ] -> eval arg
       | _ -> fail @@ arity_error_msg "unquote" args)
   | List values ->
-      let* list = traverse quote_value values in
-      return (List list)
+      let* list = traverse quote_list_value values in
+      return @@ List (List.concat list)
+
+and quote_list_value value =
+  let open State in
+  match value with
+  | List [ Symbol "unquote-splicing"; arg ] -> (
+      let* value = eval arg in
+      match value with
+      | List values -> return values
+      | _ -> fail "unquote splicing expects a list")
+  | _ ->
+      let* ev = quote_value value in
+      return [ ev ]
 
 and eval_cond =
   let open State in
