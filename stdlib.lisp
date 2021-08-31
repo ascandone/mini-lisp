@@ -23,7 +23,6 @@
     true
     ,y))
 
-
 (defmacro defun (name params body)
   `(def ,name (lambda ,params ,body)))
 
@@ -32,16 +31,31 @@
       nil
       (cons start (range (+ 1 start) end))))
 
-(defun map (f lst)
+(defun foldl (lst z f)
+  (if (atom? lst)
+    z
+    (foldl
+      (tail lst)
+      (f z (head lst))
+      f)))
+
+(defun foldr (lst z f)
   (if (atom? lst)
     nil
-    (cons
-      (f (head lst))
-      (map f (tail lst)))))
+    (f
+      (head lst)
+      (foldr (tail lst) z f))))
 
 (defun sum (lst)
-  (if (atom? lst)
-    0
-    (+
-      (head lst)
-      (sum (tail lst)))))
+  (foldl lst 0 +))
+
+(defun reverse (lst)
+  (foldl lst nil
+    (lambda (acc x) (cons x acc))))
+
+(defun map (lst f)
+  (foldr lst nil
+    (lambda (hd tl)
+      (cons (f hd) tl))))
+
+(defun inc (x) (+ 1 x))
