@@ -174,9 +174,9 @@ end
 
 let rec zip_params params args =
   match (params, args) with
+  | "&" :: rest :: _, args -> Some [ (rest, List args) ]
   | [], [] -> Some []
   | [], _ :: _ | _ :: _, [] -> None
-  | "&" :: rest :: _, args -> Some [ (rest, List args) ]
   | param :: rest_params, arg :: rest_args ->
       zip_params rest_params rest_args
       |> Option.map (fun rest -> (param, arg) :: rest)
