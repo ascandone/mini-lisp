@@ -5,6 +5,8 @@ let quote_symbol = "`"
 
 let unquote_symbol = ","
 
+let unquote_splicing_symbol = ",@"
+
 let whitespace =
   many @@ satisfy
   @@ fun ch -> match ch with ' ' | '\t' | '\n' -> true | _ -> false
@@ -40,17 +42,18 @@ let list_ expr =
   let* _ = string ")" in
   return @@ List exprs
 
-let quoted expr =
-  let* _ = string quote_symbol in
+let special_form ~syntax ~name expr =
+  let* _ = string syntax in
   let* _ = whitespace in
   let* e = expr in
-  return @@ List [ Symbol "quote"; e ]
+  return @@ List [ Symbol name; e ]
 
-let unquoted expr =
-  let* _ = string unquote_symbol in
-  let* _ = whitespace in
-  let* e = expr in
-  return @@ List [ Symbol "unquote"; e ]
+let quoted = special_form ~syntax:quote_symbol ~name:"quote"
+
+let unquoted = special_form ~syntax:unquote_symbol ~name:"unquote"
+
+let unquoted_splicing =
+  special_form ~syntax:unquote_splicing_symbol ~name:"unquote-splicing"
 
 let char_literal =
   let* _ = char '\'' in
@@ -76,6 +79,7 @@ let expr =
       list_ expr;
       quoted expr;
       unquoted expr;
+      unquoted_splicing expr;
       char_literal;
       string_literal;
     ]
