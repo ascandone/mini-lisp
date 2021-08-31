@@ -115,7 +115,7 @@ end = struct
     | args -> Error (arity_error_msg "cons" args)
 
   let isAtom = function
-    | [ List [] ] | [ Symbol _ ] | [ Number _ ] -> Ok (vbool true)
+    | [ List [] ] | [ Symbol _ ] | [ Number _ ] | [ Char _ ] -> Ok (vbool true)
     | [ _ ] -> Ok (vbool false)
     | args -> Error (arity_error_msg "atom?" args)
 
