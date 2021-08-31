@@ -114,9 +114,6 @@ end = struct
            ("tail", Native tail);
            ("cons", Native cons);
            ("println", Native println);
-           ("nil", List []);
-           ("true", Symbol "true");
-           ("otherwise", Symbol "true");
          ]
 end
 
@@ -166,6 +163,12 @@ let rec zip_params params args =
   | param :: rest_params, arg :: rest_args ->
       zip_params rest_params rest_args
       |> Option.map (fun rest -> (param, arg) :: rest)
+
+let parse_file filename =
+  let ch = open_in filename in
+  let s = really_input_string ch (in_channel_length ch) in
+  close_in ch;
+  Parser.run s
 
 let rec quote_value =
   let open State in
@@ -222,6 +225,10 @@ and eval expr =
       | Some (Value value) -> return value
       | Some (Macro (_, _, _)) -> fail "Can't take value of a macro"
       | None -> fail ("unbound value: " ^ s))
+  | List (Symbol "load" :: _args) ->
+      let* _env_backup = get_env in
+      let* _ = eval_file "bin/stdlib.lisp" in
+      return (List [])
   | List (Symbol "def" :: args) -> (
       match args with
       | [ Symbol name; form ] ->
@@ -272,7 +279,17 @@ and eval expr =
       | _ -> eval_application forms)
   | List forms -> eval_application forms
 
+and eval_file path =
+  let open State in
+  match parse_file path with
+  | Error e -> fail ("Parsing error: " ^ e)
+  | Ok exprs ->
+      let* _ = traverse eval (List.map lift_sexpr exprs) in
+      return (List [])
+
 let run env expr = State.run (eval (lift_sexpr expr)) env
 
 let run_all env exprs =
   State.run (State.traverse eval (List.map lift_sexpr exprs)) env
+
+let run_file path = State.run (eval_file path) initial_env

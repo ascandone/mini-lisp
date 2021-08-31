@@ -40,19 +40,12 @@ end
 module Reader : sig
   val run : string -> unit
 end = struct
-  let read_whole_file filename =
-    let ch = open_in filename in
-    let s = really_input_string ch (in_channel_length ch) in
-    close_in ch;
-    s
-
   let run path =
-    match Parser.run (read_whole_file path) with
-    | Error e -> print_endline ("Parsing error: " ^ e)
-    | Ok exprs -> (
-        match Eval.run_all Eval.initial_env exprs with
-        | Error e -> print_endline ("Error: " ^ e)
-        | Ok _ -> ())
+    match Eval.run_file path with
+    | Error e ->
+        print_endline ("ERROR: " ^ e);
+        ()
+    | Ok _ -> ()
 end
 
 let get_path () = try Some Sys.argv.(1) with _ -> None
