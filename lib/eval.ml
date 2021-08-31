@@ -14,6 +14,8 @@ and native_function = value list -> (value, string) result
 
 and env = env_item StringMap.t
 
+let shadow_env env env' = StringMap.union (fun _ _ y -> Some y) env env'
+
 let rec lift_sexpr = function
   | Sexpr.Number n -> Number n
   | Sexpr.Symbol s -> Symbol s
@@ -216,10 +218,7 @@ and eval_application forms =
       | None -> fail @@ arity_error_msg "lambda" args
       | Some bindings ->
           let* env = get_env in
-          let env' =
-            StringMap.union (fun _ _ y -> Some y) scope_env env
-            |> bind_all bindings
-          in
+          let env' = shadow_env scope_env env |> bind_all bindings in
           let* () = put_env env' in
           eval body)
   | Native nf :: args -> (
@@ -244,10 +243,11 @@ and eval expr =
           fail @@ "require path must be a string, got <" ^ value_to_string path
           ^ "> instead"
       | Some chars ->
-          let* env_backup = get_env in
+          let* backup_env = get_env in
           let* () = put_env initial_env in
           let* _ = eval_file (Utils.string_of_chars chars) in
-          let* () = put_env env_backup in
+          let* file_env = get_env in
+          let* () = put_env (shadow_env backup_env file_env) in
           return (List []))
   | List (Symbol "def" :: args) -> (
       match args with
@@ -286,15 +286,15 @@ and eval expr =
       | _ -> fail "Parsing error in lambda")
   | List (Symbol op :: args as forms) -> (
       let* env = get_env in
-
       match StringMap.find_opt op env with
       | Some (Macro (_, params, body)) -> (
           match zip_params params args with
-          | None -> fail @@ arity_error_msg "defmacro" args
+          | None -> fail @@ arity_error_msg op args
           | Some bindings ->
               let* env = get_env in
               let* () = put_env (env |> bind_all bindings) in
               let* value = eval body in
+              let* () = put_env env in
               eval value)
       | _ -> eval_application forms)
   | List forms -> eval_application forms
