@@ -1,11 +1,11 @@
 (* include module type of Eval *)
 
 type value =
-  | VNumber of float
-  | VSymbol of string
-  | VList of value list
-  | VNative of native_function
-  | VLambda of (env * string list * Sexpr.t)
+  | Number of float
+  | Symbol of string
+  | List of value list
+  | Native of native_function
+  | Lambda of (env * string list * value)
 
 and native_function
 

@@ -1,28 +1,32 @@
-open Sexpr
 module StringMap = Map.Make (String)
 
-type env_item = Value of value | Macro of (env * string list * Sexpr.t)
+type env_item = Value of value | Macro of (env * string list * value)
 
 and value =
-  | VNumber of float
-  | VSymbol of string
-  | VList of value list
-  | VNative of native_function
-  | VLambda of (env * string list * Sexpr.t)
+  | Number of float
+  | Symbol of string
+  | List of value list
+  | Native of native_function
+  | Lambda of (env * string list * value)
 
 and native_function = value list -> (value, string) result
 
 and env = env_item StringMap.t
 
+let rec lift_sexpr = function
+  | Sexpr.Number n -> Number n
+  | Sexpr.Symbol s -> Symbol s
+  | Sexpr.List l -> List (List.map lift_sexpr l)
+
 let rec value_to_string expr =
   match expr with
-  | VSymbol str -> str
-  | VNumber n -> string_of_float n
-  | VList [] -> "nil"
-  | VList exprs ->
+  | Symbol str -> str
+  | Number n -> string_of_float n
+  | List [] -> "nil"
+  | List exprs ->
       "(" ^ (exprs |> List.map value_to_string |> String.concat " ") ^ ")"
-  | VNative _ -> "[[Native function]]"
-  | VLambda _ -> "[[Lambda]]"
+  | Native _ -> "[[Native function]]"
+  | Lambda _ -> "[[Lambda]]"
 
 let env_to_string (env : env) =
   let body =
@@ -54,48 +58,48 @@ let bind_all bindings env =
        (fun e (param, value) -> StringMap.add param (Value value) e)
        env
 
-let truthy = function VSymbol "true" -> true | _ -> false
+let truthy = function Symbol "true" -> true | _ -> false
 
 module Prelude : sig
   val env : env
 end = struct
-  let nil = VList []
+  let nil = List []
 
-  let vbool b = if b then VSymbol "true" else nil
+  let vbool b = if b then Symbol "true" else nil
 
   let plus values =
-    match pred_all (function VNumber s -> Ok s | e -> Error e) values with
-    | Ok nums -> Ok (VNumber (List.fold_left ( +. ) 0. nums))
+    match pred_all (function Number s -> Ok s | e -> Error e) values with
+    | Ok nums -> Ok (Number (List.fold_left ( +. ) 0. nums))
     | Error _ -> Error "Sum expects numbers as arguments"
 
   let println values =
     values |> List.map value_to_string |> String.concat " " |> print_endline;
-    Ok (VList [])
+    Ok (List [])
 
   let eq = function
-    | [ VList []; VList [] ] -> Ok (vbool true)
-    | [ VSymbol x; VSymbol y ] when x = y -> Ok (vbool true)
-    | [ VNumber x; VNumber y ] when x = y -> Ok (vbool true)
+    | [ List []; List [] ] -> Ok (vbool true)
+    | [ Symbol x; Symbol y ] when x = y -> Ok (vbool true)
+    | [ Number x; Number y ] when x = y -> Ok (vbool true)
     | [ _; _ ] -> Ok (vbool false)
     | args -> Error (arity_error_msg "=" args)
 
   let head = function
-    | [ VList (hd :: _) ] -> Ok hd
+    | [ List (hd :: _) ] -> Ok hd
     | [ _ ] -> Ok nil
     | args -> Error (arity_error_msg "head" args)
 
   let tail = function
-    | [ VList (_ :: tl) ] -> Ok (VList tl)
+    | [ List (_ :: tl) ] -> Ok (List tl)
     | [ _ ] -> Ok nil
     | args -> Error (arity_error_msg "tail" args)
 
   let cons = function
-    | [ x; VList xs ] -> Ok (VList (x :: xs))
+    | [ x; List xs ] -> Ok (List (x :: xs))
     | [ _; _ ] -> Error "the second argument is expected to be a list"
     | args -> Error (arity_error_msg "cons" args)
 
   let isAtom = function
-    | [ VList [] ] | [ VSymbol _ ] | [ VNumber _ ] -> Ok (vbool true)
+    | [ List [] ] | [ Symbol _ ] | [ Number _ ] -> Ok (vbool true)
     | [ _ ] -> Ok (vbool false)
     | args -> Error (arity_error_msg "atom?" args)
 
@@ -103,16 +107,16 @@ end = struct
     StringMap.empty
     |> bind_all
          [
-           ("atom?", VNative isAtom);
-           ("+", VNative plus);
-           ("=", VNative eq);
-           ("head", VNative head);
-           ("tail", VNative tail);
-           ("cons", VNative cons);
-           ("println", VNative println);
-           ("nil", VList []);
-           ("true", VSymbol "true");
-           ("otherwise", VSymbol "true");
+           ("atom?", Native isAtom);
+           ("+", Native plus);
+           ("=", Native eq);
+           ("head", Native head);
+           ("tail", Native tail);
+           ("cons", Native cons);
+           ("println", Native println);
+           ("nil", List []);
+           ("true", Symbol "true");
+           ("otherwise", Symbol "true");
          ]
 end
 
@@ -166,20 +170,21 @@ let rec zip_params params args =
 let rec quote_value =
   let open State in
   function
-  | Symbol x -> return (VSymbol x)
-  | Number x -> return (VNumber x)
+  | Symbol x -> return (Symbol x)
+  | Number x -> return (Number x)
   | List (Symbol "unquote" :: args) -> (
       match args with
       | [ arg ] -> eval arg
       | _ -> fail @@ arity_error_msg "unquote" args)
   | List values ->
       let* list = traverse quote_value values in
-      return (VList list)
+      return (List list)
+  | _ -> raise Exit
 
 and eval_cond =
   let open State in
   function
-  | [] -> return (VList [])
+  | [] -> return (List [])
   | b :: y :: rest ->
       let* b_value = eval b in
       if truthy b_value then eval y else eval_cond rest
@@ -189,8 +194,8 @@ and eval_application forms =
   let open State in
   let* values = traverse eval forms in
   match values with
-  | [] -> return (VList [])
-  | VLambda (scope_env, params_, body) :: args -> (
+  | [] -> return (List [])
+  | Lambda (scope_env, params_, body) :: args -> (
       match zip_params params_ args with
       | None -> fail @@ arity_error_msg "lambda" args
       | Some bindings ->
@@ -201,14 +206,16 @@ and eval_application forms =
           in
           let* () = put_env env' in
           eval body)
-  | VNative nf :: args -> (
+  | Native nf :: args -> (
       match nf args with Ok r -> return r | Error e -> fail e)
   | v :: _ -> fail (value_to_string v ^ " is not a function")
 
 and eval expr =
   let open State in
   match expr with
-  | Number n -> return (VNumber n)
+  | Native _ -> return expr
+  | Lambda _ -> return expr
+  | Number n -> return (Number n)
   | Symbol s -> (
       let* env = get_env in
       match StringMap.find_opt s env with
@@ -221,7 +228,7 @@ and eval expr =
           let* value = eval form in
           let* env = get_env in
           let* () = put_env (StringMap.add name (Value value) env) in
-          return (VList [])
+          return (List [])
       | _ -> fail @@ arity_error_msg "def" args)
   | List (Symbol "defmacro" :: args) -> (
       match args with
@@ -234,7 +241,7 @@ and eval expr =
               let* env = get_env in
               let macro = Macro (env, params_values, body) in
               let* () = put_env (StringMap.add name macro env) in
-              return (VList []))
+              return (List []))
       | _ -> fail @@ arity_error_msg "defmacro" args)
   | List (Symbol "quote" :: args) -> (
       match args with [ arg ] -> quote_value arg | _ -> fail "Arity error")
@@ -248,27 +255,24 @@ and eval expr =
           | Error _ -> fail "Parsing error in lambda: params must be symbols"
           | Ok params_ ->
               let* env = get_env in
-              return @@ VLambda (env, params_, body))
+              return @@ Lambda (env, params_, body))
       | _ -> fail "Parsing error in lambda")
-  | List (Symbol op :: _args as forms) -> (
+  | List (Symbol op :: args as forms) -> (
       let* env = get_env in
+
       match StringMap.find_opt op env with
-      | Some (Macro (_, _, body)) ->
-          let* value = eval body in
-          macro_expand value
+      | Some (Macro (_, params, body)) -> (
+          match zip_params params args with
+          | None -> fail @@ arity_error_msg "defmacro" args
+          | Some bindings ->
+              let* env = get_env in
+              let* () = put_env (env |> bind_all bindings) in
+              let* value = eval body in
+              eval value)
       | _ -> eval_application forms)
   | List forms -> eval_application forms
 
-and macro_expand : value -> value State.t =
-  let open State in
-  function
-  | VSymbol s -> eval (Symbol s)
-  | VList values ->
-      let* prova = traverse macro_expand values in
-      let* values = traverse macro_expand values in
-      return (VList values)
-  | e -> return e
+let run env expr = State.run (eval (lift_sexpr expr)) env
 
-let run env expr = State.run (eval expr) env
-
-let run_all env exprs = State.run (State.traverse eval exprs) env
+let run_all env exprs =
+  State.run (State.traverse eval (List.map lift_sexpr exprs)) env
