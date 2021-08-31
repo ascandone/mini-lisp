@@ -114,22 +114,38 @@ end = struct
     | [ _; _ ] -> Error "Cons: the second argument is expected to be a list"
     | args -> Error (arity_error_msg "cons" args)
 
-  let isAtom = function
+  let is_atom = function
     | [ List [] ] | [ Symbol _ ] | [ Number _ ] | [ Char _ ] -> Ok (vbool true)
     | [ _ ] -> Ok (vbool false)
     | args -> Error (arity_error_msg "atom?" args)
+
+  let make_string str =
+    List (List.map (fun ch -> Char ch) @@ Utils.chars_of_string str)
+
+  let tag = function
+    | List _ -> "list"
+    | Char _ -> "char"
+    | Number _ -> "number"
+    | Symbol _ -> "symbol"
+    | Lambda _ -> "closure"
+    | Native _ -> "function"
+
+  let type_of = function
+    | [ arg ] -> Ok (make_string (tag arg))
+    | args -> Error (arity_error_msg "type-of" args)
 
   let env =
     StringMap.empty
     |> bind_all
          [
-           ("atom?", Native isAtom);
+           ("atom?", Native is_atom);
            ("+", Native plus);
            ("=", Native eq);
            ("head", Native head);
            ("tail", Native tail);
            ("cons", Native cons);
            ("println", Native println);
+           ("type-of", Native type_of);
          ]
 end
 

@@ -49,7 +49,7 @@ let unquoted = special_form ~syntax:"," ~name:"unquote"
 let unquoted_splicing = special_form ~syntax:",@" ~name:"unquote-splicing"
 
 let char_literal =
-  let* _ = char '\'' in
+  let* _ = string "#\'" in
   let* c = any_char in
   let* _ = char '\'' in
   return (Char c)
@@ -60,8 +60,6 @@ let string_literal =
   let* _ = char '\"' in
   let lst = chars |> Utils.chars_of_string |> List.map (fun ch -> Char ch) in
   return @@ List [ Symbol "quote"; List lst ]
-
-(* (List [ Char 'a'; Char 'b' ]) *)
 
 let expr =
   fix @@ fun expr ->
