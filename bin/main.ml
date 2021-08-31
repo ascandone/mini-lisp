@@ -18,6 +18,8 @@ end = struct
     print_string "> ";
     match read_line () with
     | ":{" -> multiline env
+    | ":std" -> print env "(require \"stdlib.lisp\")"
+    | ":refresh" -> run Eval.initial_env
     | ":exit" -> ()
     | ":env" ->
         print_endline (Eval.env_to_string env);
