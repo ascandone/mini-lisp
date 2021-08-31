@@ -1,7 +1,9 @@
 open Sexpr
 module StringMap = Map.Make (String)
 
-type value =
+type env_item = Value of value | Macro of (env * string list * Sexpr.t)
+
+and value =
   | VNumber of float
   | VSymbol of string
   | VList of value list
@@ -10,7 +12,7 @@ type value =
 
 and native_function = value list -> (value, string) result
 
-and env = value StringMap.t
+and env = env_item StringMap.t
 
 let rec value_to_string expr =
   match expr with
@@ -22,10 +24,15 @@ let rec value_to_string expr =
   | VNative _ -> "[[Native function]]"
   | VLambda _ -> "[[Lambda]]"
 
-let env_to_string env =
+let env_to_string (env : env) =
   let body =
     StringMap.bindings env
-    |> List.map (fun (name, value) -> name ^ ": " ^ value_to_string value)
+    |> List.map (fun (name, value) ->
+           name ^ ": "
+           ^
+           match value with
+           | Value value -> value_to_string value
+           | Macro (_, _, _) -> "[[Macro]]")
     |> String.concat ", "
   in
   "{ " ^ body ^ " }"
@@ -43,7 +50,9 @@ let rec pred_all mapper = function
 
 let bind_all bindings env =
   bindings
-  |> List.fold_left (fun e (param, arg) -> StringMap.add param arg e) env
+  |> List.fold_left
+       (fun e (param, value) -> StringMap.add param (Value value) e)
+       env
 
 let truthy = function VSymbol "true" -> true | _ -> false
 
@@ -182,16 +191,30 @@ and eval expr =
   | Symbol s -> (
       let* env = get_env in
       match StringMap.find_opt s env with
-      | Some value -> return value
+      | Some (Value value) -> return value
+      | Some (Macro (_, _, _)) -> fail "Can't take value of a macro"
       | None -> fail ("unbound value: " ^ s))
   | List (Symbol "def" :: args) -> (
       match args with
       | [ Symbol name; form ] ->
           let* value = eval form in
           let* env = get_env in
-          let* () = put_env (StringMap.add name value env) in
+          let* () = put_env (StringMap.add name (Value value) env) in
           return (VList [])
       | _ -> fail @@ arity_error_msg "def" args)
+  | List (Symbol "defmacro" :: args) -> (
+      match args with
+      | [ Symbol name; List params; body ] -> (
+          match
+            pred_all (function Symbol s -> Ok s | e -> Error e) params
+          with
+          | Error _ -> fail "Parsing error in defmacro: params must be symbols"
+          | Ok params_values ->
+              let* env = get_env in
+              let macro = Macro (env, params_values, body) in
+              let* () = put_env (StringMap.add name macro env) in
+              return (VList []))
+      | _ -> fail @@ arity_error_msg "defmacro" args)
   | List (Symbol "quote" :: args) -> (
       match args with [ arg ] -> quote_value arg | _ -> fail "Arity error")
   | List (Symbol "cond" :: args) -> eval_cond args
@@ -201,7 +224,7 @@ and eval expr =
           match
             pred_all (function Symbol s -> Ok s | e -> Error e) params
           with
-          | Error _ -> fail "Parsing error in lambda: params must be symbol"
+          | Error _ -> fail "Parsing error in lambda: params must be symbols"
           | Ok params_ ->
               let* env = get_env in
               return @@ VLambda (env, params_, body))
