@@ -8,6 +8,22 @@
       ,b ,x
       otherwise ,y))
 
+(defmacro not (x)
+  `(if ,x
+    false
+    true))
+
+(defmacro and (x y)
+  `(if ,x
+    ,y
+    false))
+
+(defmacro or (x y)
+  `(if ,x
+    true
+    ,y))
+
+
 (defmacro defun (name params body)
   `(def ,name (lambda ,params ,body)))
 
