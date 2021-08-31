@@ -1,12 +1,6 @@
 open Angstrom
 open Sexpr
 
-let quote_symbol = "`"
-
-let unquote_symbol = ","
-
-let unquote_splicing_symbol = ",@"
-
 let whitespace =
   many @@ satisfy
   @@ fun ch -> match ch with ' ' | '\t' | '\n' -> true | _ -> false
@@ -48,12 +42,11 @@ let special_form ~syntax ~name expr =
   let* e = expr in
   return @@ List [ Symbol name; e ]
 
-let quoted = special_form ~syntax:quote_symbol ~name:"quote"
+let quoted = special_form ~syntax:"`" ~name:"quote"
 
-let unquoted = special_form ~syntax:unquote_symbol ~name:"unquote"
+let unquoted = special_form ~syntax:"," ~name:"unquote"
 
-let unquoted_splicing =
-  special_form ~syntax:unquote_splicing_symbol ~name:"unquote-splicing"
+let unquoted_splicing = special_form ~syntax:",@" ~name:"unquote-splicing"
 
 let char_literal =
   let* _ = char '\'' in

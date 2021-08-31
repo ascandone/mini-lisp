@@ -26,6 +26,9 @@
 (defmacro defun (name params body)
   `(def ,name (lambda ,params ,body)))
 
+(defmacro list (& xs)
+  ``(,@xs))
+
 (defun range (start end)
   (if (= start end)
       nil
