@@ -1,6 +1,6 @@
 module StringMap = Map.Make (String)
 
-type env_item = Value of value | Macro of (env * string list * value)
+type env_item = Value of value | Macro of (string list * value)
 
 and value =
   | Number of float
@@ -59,7 +59,7 @@ let env_to_string (env : env) =
            ^
            match value with
            | Value value -> value_to_string value
-           | Macro (_, _, _) -> "[[Macro]]")
+           | Macro (_, _) -> "[[Macro]]")
     |> String.concat ", "
   in
   "{ " ^ body ^ " }"
@@ -252,7 +252,7 @@ and eval expr =
       let* env = get_env in
       match StringMap.find_opt s env with
       | Some (Value value) -> return value
-      | Some (Macro (_, _, _)) -> fail "Can't take value of a macro"
+      | Some (Macro (_, _)) -> fail "Can't take value of a macro"
       | None -> fail ("unbound value: " ^ s))
   | List (Symbol "require" :: path_symbol :: _) -> (
       (* TODO import selection  *)
@@ -285,7 +285,7 @@ and eval expr =
           | Error _ -> fail "Parsing error in defmacro: params must be symbols"
           | Ok params_values ->
               let* env = get_env in
-              let macro = Macro (env, params_values, body) in
+              let macro = Macro (params_values, body) in
               let* () = put_env (StringMap.add name macro env) in
               return (List []))
       | _ -> fail @@ arity_error_msg "defmacro" args)
@@ -306,7 +306,7 @@ and eval expr =
   | List (Symbol op :: args as forms) -> (
       let* env = get_env in
       match StringMap.find_opt op env with
-      | Some (Macro (_, params, body)) -> (
+      | Some (Macro (params, body)) -> (
           match zip_params params args with
           | None -> fail @@ arity_error_msg op args
           | Some bindings ->
