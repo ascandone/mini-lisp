@@ -164,8 +164,8 @@ module State = struct
 
   let fail reason = State (fun _ -> Error reason)
 
-  (* let map f (State runState) =
-     State (fun env -> runState env |> Result.map (fun (env, x) -> (env, f x))) *)
+  let map f (State runState) =
+    State (fun env -> runState env |> Result.map (fun (env, x) -> (env, f x)))
 
   let bind (State runState) f =
     State
@@ -174,7 +174,7 @@ module State = struct
             let (State runState') = f x in
             runState' env))
 
-  (* let ( let+ ) state f = map f state *)
+  let ( let+ ) state f = map f state
 
   let ( let* ) = bind
 
@@ -210,30 +210,13 @@ let with_env f =
   let* () = put_env backup_env in
   return res
 
-(* TODO reuse eval *)
 let rec quote_value value =
   let open State in
   match value with
-  | Symbol _ | Number _ | Char _ | Lambda _ | Native _ -> return value
-  | List (Symbol "unquote" :: args) -> (
-      match args with
-      | [ arg ] -> eval arg
-      | _ -> fail @@ arity_error_msg "unquote" args)
   | List values ->
-      let* list = traverse quote_list_value values in
-      return @@ List (List.concat list)
-
-and quote_list_value value =
-  let open State in
-  match value with
-  | List [ Symbol "unquote-splicing"; arg ] -> (
-      let* value = eval arg in
-      match value with
-      | List values -> return values
-      | _ -> fail "unquote splicing expects a list")
-  | _ ->
-      let* ev = quote_value value in
-      return [ ev ]
+      let+ list = traverse quote_value values in
+      List list
+  | _ -> return value
 
 and eval_cond =
   let open State in
