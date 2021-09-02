@@ -1,6 +1,8 @@
 module StringMap = Map.Make (String)
 
-type env_item = Value of value | Macro of (string list * value)
+type param = Param of string | Destruct of param list
+
+type env_item = Value of value | Macro of param list * value
 
 and value =
   | Number of float
@@ -8,7 +10,7 @@ and value =
   | Char of char
   | List of value list
   | Native of native_function
-  | Lambda of (env * string list * value)
+  | Lambda of (env * param list * value)
 
 and native_function = value list -> (value, string) result
 
@@ -188,14 +190,29 @@ module State = struct
         return (x' :: xs')
 end
 
+let rec extract_params = function
+  | [] -> Ok []
+  | Symbol name :: xs ->
+      extract_params xs |> Result.map (fun xs' -> Param name :: xs')
+  | List params :: xs ->
+      Result.bind (extract_params params) (fun ps ->
+          extract_params xs |> Result.map (fun xs' -> Destruct ps :: xs'))
+  | _ -> Error "Invalid param"
+
 let rec zip_params params args =
   match (params, args) with
-  | "&" :: rest :: _, args -> Some [ (rest, List args) ]
-  | [], [] -> Some []
-  | [], _ :: _ | _ :: _, [] -> None
-  | param :: rest_params, arg :: rest_args ->
+  | Param "&" :: Param name :: _, args -> Ok [ (name, List args) ]
+  | Destruct params :: rest_params, List args :: rest_args ->
+      Result.bind (zip_params params args) (fun p ->
+          Result.map
+            (fun p' -> List.append p p')
+            (zip_params rest_params rest_args))
+  | Destruct _ :: _, _ -> Error `Destructuring
+  | [], [] -> Ok []
+  | [], _ :: _ | _ :: _, [] -> Error `Arity
+  | Param name :: rest_params, arg :: rest_args ->
       zip_params rest_params rest_args
-      |> Option.map (fun rest -> (param, arg) :: rest)
+      |> Result.map (fun rest -> (name, arg) :: rest)
 
 let parse_file filename =
   let ch = open_in filename in
@@ -232,10 +249,11 @@ and eval_application forms =
   let* values = traverse eval forms in
   match values with
   | [] -> return (List [])
-  | Lambda (scope_env, params_, body) :: args -> (
-      match zip_params params_ args with
-      | None -> fail @@ arity_error_msg "lambda" args
-      | Some bindings ->
+  | Lambda (scope_env, params, body) :: args -> (
+      match zip_params params args with
+      | Error `Arity -> fail @@ arity_error_msg "lambda" args
+      | Error `Destructuring -> fail "destructuring error"
+      | Ok bindings ->
           with_env @@ fun env ->
           let env' = shadow_env env scope_env |> bind_all bindings in
           let* () = put_env env' in
@@ -279,9 +297,7 @@ and eval expr =
   | List (Symbol "defmacro" :: args) -> (
       match args with
       | [ Symbol name; List params; body ] -> (
-          match
-            pred_all (function Symbol s -> Ok s | e -> Error e) params
-          with
+          match extract_params params with
           | Error _ -> fail "Parsing error in defmacro: params must be symbols"
           | Ok params_values ->
               let* env = get_env in
@@ -294,22 +310,21 @@ and eval expr =
   | List (Symbol "cond" :: args) -> eval_cond args
   | List (Symbol "lambda" :: args) -> (
       match args with
-      | [ List params; body ] -> (
-          match
-            pred_all (function Symbol s -> Ok s | e -> Error e) params
-          with
+      | [ List values; body ] -> (
+          match extract_params values with
           | Error _ -> fail "Parsing error in lambda: params must be symbols"
-          | Ok params_ ->
-              let* env = get_env in
-              return @@ Lambda (env, params_, body))
+          | Ok params' ->
+              let+ env = get_env in
+              Lambda (env, params', body))
       | _ -> fail "Parsing error in lambda")
   | List (Symbol op :: args as forms) -> (
       let* env = get_env in
       match StringMap.find_opt op env with
       | Some (Macro (params, body)) -> (
           match zip_params params args with
-          | None -> fail @@ arity_error_msg op args
-          | Some bindings ->
+          | Error `Arity -> fail @@ arity_error_msg op args
+          | Error `Destructuring -> fail "destructuring error in macro"
+          | Ok bindings ->
               let* env = get_env in
               let* () = put_env (env |> bind_all bindings) in
               let* value = eval body in
@@ -323,8 +338,8 @@ and eval_file path =
   match parse_file path with
   | Error e -> fail ("Parsing error: " ^ e)
   | Ok exprs ->
-      let* _ = traverse eval (List.map lift_sexpr exprs) in
-      return (List [])
+      let+ _ = traverse eval (List.map lift_sexpr exprs) in
+      List []
 
 let run env expr = State.run (eval (lift_sexpr expr)) env
 
