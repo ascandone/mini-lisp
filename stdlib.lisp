@@ -87,4 +87,11 @@
     (lambda (hd tl)
       (cons (f hd) tl))))
 
+(defun filter (lst pred)
+  (foldr lst nil
+    (lambda (hd tl)
+      (if (pred hd)
+        (cons hd tl)
+        tl))))
+
 (defun inc (x) (+ 1 x))
