@@ -55,6 +55,13 @@
       body
       `(let ~pairs ~body))))
 
+(defmacro -> (x & fs)
+  (if (atom? fs)
+    x
+    (let (((operand & operators) & tl) fs)
+      `(-> (~operand ~x ~@operators)
+        ~@tl))))
+
 (defun range (start end)
   (if (= start end)
       nil
