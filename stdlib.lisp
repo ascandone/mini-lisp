@@ -43,6 +43,18 @@
 (defmacro defun (name params body)
   `(def ,name (lambda ,params ,body)))
 
+(defun second (lst)
+  (head (tail lst)))
+
+(defmacro let- ((param value) body)
+  `((lambda (,param) ,body) ,value))
+
+(defmacro let ((param value & pairs) body)
+  `(let- (,param ,value)
+    ,(if (atom? pairs)
+      body
+      `(let ,pairs ,body))))
+
 (defun range (start end)
   (if (= start end)
       nil
@@ -55,13 +67,6 @@
       (tail lst)
       (f z (head lst))
       f)))
-
-(defun foldr (lst z f)
-  (if (atom? lst)
-    nil
-    (f
-      (head lst)
-      (foldr (tail lst) z f))))
 
 (defun sum (lst)
   (foldl lst 0 +))
