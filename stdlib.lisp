@@ -1,7 +1,24 @@
-(def true `true)
+(def true 'true)
 (def otherwise true)
-(def nil `())
+(def nil '())
 (def false nil)
+
+(def list (lambda (& xs) xs))
+
+(def foldr
+  (lambda (lst z f)
+    (cond
+      (atom? lst) z
+      otherwise (f
+                  (head lst)
+                  (foldr (tail lst) z f)))))
+
+(def concat
+  (lambda (& nested)
+    (foldr
+      nested
+      nil
+      (lambda (xs ys) (foldr xs ys cons)))))
 
 (defmacro if (b x y)
   `(cond
@@ -25,9 +42,6 @@
 
 (defmacro defun (name params body)
   `(def ,name (lambda ,params ,body)))
-
-(defmacro list (& xs)
-  ``(,@xs))
 
 (defun range (start end)
   (if (= start end)

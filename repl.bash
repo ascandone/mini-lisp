@@ -1,1 +1,1 @@
-rlwrap dune exec bin/main.exe
+clear && rlwrap dune exec bin/main.exe

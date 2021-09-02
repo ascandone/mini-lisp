@@ -6,7 +6,8 @@ val env_to_string : env -> string
 
 val run : env -> Sexpr.t -> (env * value, string) result
 
-val run_all : env -> Sexpr.t list -> (env * value list, string) result
+val run_all :
+  ?debug_read:bool -> env -> Sexpr.t list -> (env * value list, string) result
 
 val initial_env : env
 

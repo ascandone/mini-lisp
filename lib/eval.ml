@@ -44,7 +44,7 @@ let rec value_to_string expr =
       match expr with
       | Symbol str -> str
       | Number n -> string_of_float n
-      | Char ch -> Char.escaped ch
+      | Char ch -> "#\'" ^ Char.escaped ch ^ "'"
       | List [] -> "nil"
       | List exprs ->
           "(" ^ (exprs |> List.map value_to_string |> String.concat " ") ^ ")"
@@ -345,7 +345,12 @@ and eval_file path =
 
 let run env expr = State.run (eval (lift_sexpr expr)) env
 
-let run_all env exprs =
-  State.run (State.traverse eval (List.map lift_sexpr exprs)) env
+let run_all ?(debug_read = false) env exprs =
+  let values = exprs |> List.map lift_sexpr in
+  if debug_read then (
+    print_string "=> ";
+    values |> List.map value_to_string |> String.concat " " |> print_endline)
+  else ();
+  State.run (State.traverse eval values) env
 
 let run_file path = State.run (eval_file path) initial_env

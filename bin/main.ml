@@ -1,10 +1,14 @@
 open Lib
+(*
+   let app xs = List.fold_right List.cons xs
+
+   let concat xs = List.fold_right (fun x y -> app y x) xs [] *)
 
 module Repl : sig
   val run : Eval.env -> unit
 end = struct
   let evalute_results exprs env =
-    match Eval.run_all env exprs with
+    match Eval.run_all ~debug_read:false env exprs with
     | Error err ->
         print_endline ("## Error: " ^ err);
         env
