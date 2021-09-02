@@ -98,6 +98,7 @@ end = struct
     | [ List []; List [] ] -> Ok (vbool true)
     | [ Symbol x; Symbol y ] when x = y -> Ok (vbool true)
     | [ Number x; Number y ] when x = y -> Ok (vbool true)
+    | [ Char x; Char y ] when x = y -> Ok (vbool true)
     | [ _; _ ] -> Ok (vbool false)
     | args -> Error (arity_error_msg "=" args)
 
