@@ -95,3 +95,8 @@
         tl))))
 
 (defun inc (x) (+ 1 x))
+
+(defun == (x y)
+  (cond
+    (and (atom? x) (= x y)) true))
+    
