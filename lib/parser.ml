@@ -7,12 +7,12 @@ let quote_symbol = "'"
 
 let backquote_symbol = "`"
 
-let unquote_symbol = ","
+let unquote_symbol = "~"
 
-let unquote_splicing_symbol = ",@"
+let unquote_splicing_symbol = "~@"
 
 let whitespace =
-  many @@ satisfy @@ function ' ' | '\t' | '\n' -> true | _ -> false
+  many @@ satisfy @@ function ' ' | '\t' | '\n' | ',' -> true | _ -> false
 
 let is_digit ch = match ch with '0' .. '9' -> true | _ -> false
 

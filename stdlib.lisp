@@ -22,38 +22,38 @@
 
 (defmacro if (b x y)
   `(cond
-      ,b ,x
-      otherwise ,y))
+      ~b ~x
+      otherwise ~y))
 
 (defmacro not (x)
-  `(if ,x
+  `(if ~x
     false
     true))
 
 (defmacro and (x y)
-  `(if ,x
-    ,y
+  `(if ~x
+    ~y
     false))
 
 (defmacro or (x y)
-  `(if ,x
+  `(if ~x
     true
-    ,y))
+    ~y))
 
 (defmacro defun (name params body)
-  `(def ,name (lambda ,params ,body)))
+  `(def ~name (lambda ~params ~body)))
 
 (defun second (lst)
   (head (tail lst)))
 
 (defmacro let- ((param value) body)
-  `((lambda (,param) ,body) ,value))
+  `((lambda (~param) ~body) ~value))
 
 (defmacro let ((param value & pairs) body)
-  `(let- (,param ,value)
-    ,(if (atom? pairs)
+  `(let- (~param ~value)
+    ~(if (atom? pairs)
       body
-      `(let ,pairs ,body))))
+      `(let ~pairs ~body))))
 
 (defun range (start end)
   (if (= start end)
