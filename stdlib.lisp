@@ -96,7 +96,20 @@
 
 (defun inc (x) (+ 1 x))
 
+(defun list-eq (xs ys)
+  (if (atom? x)
+    (atom? y)
+    (let ((x & xs1) xs
+          (y & ys1) ys)
+      (and
+        (== x y)
+        (list-eq xs1 ys1)))))
+  
 (defun == (x y)
   (cond
-    (and (atom? x) (= x y)) true))
+    (and (atom? x) (atom? y))   (= x y)
+
+    (and (not (atom? x))
+         (not (atom? x)))       (list-eq x y)
     
+    otherwise                   false))
