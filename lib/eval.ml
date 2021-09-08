@@ -200,21 +200,6 @@ let rec extract_params = function
           extract_params xs |> Result.map (fun xs' -> Destruct ps :: xs'))
   | _ -> Error "Invalid param"
 
-(*
-
-  (lambda (x y (a &optional b) z)
-    nil)
-
-  (let ((x &opt y) '(1 2))
-    `(~x ~y)) => nil
-
-  
-  (let (
-      (x &opt y) '(1)
-    )
-    `(~x ~y)) => nil
-*)
-
 let rec zip_optional_params params args =
   let open Utils.LetSyntax.Result in
   match (params, args) with
