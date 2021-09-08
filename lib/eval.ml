@@ -200,12 +200,39 @@ let rec extract_params = function
           extract_params xs |> Result.map (fun xs' -> Destruct ps :: xs'))
   | _ -> Error "Invalid param"
 
-let zip_optiona_params = 0
+(*
+
+  (lambda (x y (a &optional b) z)
+    nil)
+
+  (let ((x &opt y) '(1 2))
+    `(~x ~y)) => nil
+
+  
+  (let (
+      (x &opt y) '(1)
+    )
+    `(~x ~y)) => nil
+*)
+
+let rec zip_optional_params params args =
+  let open Utils.LetSyntax.Result in
+  match (params, args) with
+  | [], [] -> Ok []
+  | [], _ :: _ -> Error `Arity
+  | Param name :: rest_params, [] ->
+      let+ rest = zip_optional_params rest_params [] in
+      (name, List []) :: rest
+  | Param name :: rest_params, arg :: rest_args ->
+      let+ rest = zip_optional_params rest_params rest_args in
+      (name, arg) :: rest
+  | _ -> Error `OptionalParam
 
 let rec zip_params params args =
   let open Utils.LetSyntax.Result in
   match (params, args) with
   | Param "&rest" :: Param name :: _, args -> Ok [ (name, List args) ]
+  | Param "&opt" :: params, args -> zip_optional_params params args
   | Destruct params :: rest_params, List args :: rest_args ->
       let* p = zip_params params args in
       let+ p' = zip_params rest_params rest_args in
@@ -256,6 +283,7 @@ and eval_application forms =
       match zip_params params args with
       | Error `Arity -> fail @@ arity_error_msg "lambda" args
       | Error `Destructuring -> fail "destructuring error"
+      | Error `OptionalParam -> fail "optional parameter syntax error"
       | Ok bindings ->
           with_env @@ fun env ->
           let env' = shadow_env env scope_env |> bind_all bindings in
@@ -330,6 +358,8 @@ and eval expr =
           match zip_params params args with
           | Error `Arity -> fail @@ arity_error_msg op args
           | Error `Destructuring -> fail "destructuring error in macro"
+          | Error `OptionalParam ->
+              fail "optional parameter syntax error in macro"
           | Ok bindings ->
               let* env = get_env in
               let* () = put_env (env |> bind_all bindings) in
