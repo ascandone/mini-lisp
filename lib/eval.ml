@@ -306,6 +306,9 @@ and eval expr =
               let* () = put_env (StringMap.add name macro env) in
               return (List []))
       | _ -> fail @@ arity_error_msg "defmacro" args)
+  | List (Symbol "do" :: args) ->
+      let* values = traverse eval args in
+      return (match List.rev values with [] -> List [] | last :: _ -> last)
   | List (Symbol "quote" :: args) -> (
       match args with [ arg ] -> quote_value arg | _ -> fail "Arity error")
   | List (Symbol "cond" :: args) -> eval_cond args
