@@ -3,7 +3,7 @@
 (def nil '())
 (def false nil)
 
-(def list (lambda (& xs) xs))
+(def list (lambda (&rest xs) xs))
 
 (def foldr
   (lambda (lst z f)
@@ -14,7 +14,7 @@
                   (foldr (tail lst) z f)))))
 
 (def concat
-  (lambda (& nested)
+  (lambda (&rest nested)
     (foldr
       nested
       nil
@@ -49,16 +49,16 @@
 (defmacro let- ((param value) body)
   `((lambda (~param) ~body) ~value))
 
-(defmacro let ((param value & pairs) body)
+(defmacro let ((param value &rest pairs) body)
   `(let- (~param ~value)
     ~(if (atom? pairs)
       body
       `(let ~pairs ~body))))
 
-(defmacro -> (x & fs)
+(defmacro -> (x &rest fs)
   (if (atom? fs)
     x
-    (let (((operand & operators) & tl) fs)
+    (let (((operand &rest operators) &rest tl) fs)
       `(-> (~operand ~x ~@operators)
         ~@tl))))
 
@@ -99,8 +99,8 @@
 (defun list-eq (xs ys)
   (if (atom? x)
     (atom? y)
-    (let ((x & xs1) xs
-          (y & ys1) ys)
+    (let ((x &rest xs1) xs
+          (y &rest ys1) ys)
       (and
         (== x y)
         (list-eq xs1 ys1)))))
