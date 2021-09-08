@@ -200,20 +200,22 @@ let rec extract_params = function
           extract_params xs |> Result.map (fun xs' -> Destruct ps :: xs'))
   | _ -> Error "Invalid param"
 
+let zip_optiona_params = 0
+
 let rec zip_params params args =
+  let open Utils.LetSyntax.Result in
   match (params, args) with
-  | Param "&" :: Param name :: _, args -> Ok [ (name, List args) ]
+  | Param "&rest" :: Param name :: _, args -> Ok [ (name, List args) ]
   | Destruct params :: rest_params, List args :: rest_args ->
-      Result.bind (zip_params params args) (fun p ->
-          Result.map
-            (fun p' -> List.append p p')
-            (zip_params rest_params rest_args))
+      let* p = zip_params params args in
+      let+ p' = zip_params rest_params rest_args in
+      List.append p p'
   | Destruct _ :: _, _ -> Error `Destructuring
   | [], [] -> Ok []
   | [], _ :: _ | _ :: _, [] -> Error `Arity
   | Param name :: rest_params, arg :: rest_args ->
-      zip_params rest_params rest_args
-      |> Result.map (fun rest -> (name, arg) :: rest)
+      let+ rest = zip_params rest_params rest_args in
+      (name, arg) :: rest
 
 let parse_file filename =
   let ch = open_in filename in
