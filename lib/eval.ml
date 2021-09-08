@@ -1,8 +1,6 @@
 module StringMap = Map.Make (String)
 
-type param = Param of string | Destruct of param list
-
-type env_item = Value of value | Macro of param list * value
+type env_item = Value of value | Macro of value list * value
 
 and value =
   | Number of float
@@ -10,7 +8,7 @@ and value =
   | Char of char
   | List of value list
   | Native of native_function
-  | Lambda of (env * param list * value)
+  | Lambda of (env * value list * value)
 
 and native_function = value list -> (value, string) result
 
@@ -191,43 +189,68 @@ module State = struct
         return (x' :: xs')
 end
 
-let rec extract_params = function
-  | [] -> Ok []
-  | Symbol name :: xs ->
-      extract_params xs |> Result.map (fun xs' -> Param name :: xs')
-  | List params :: xs ->
-      Result.bind (extract_params params) (fun ps ->
-          extract_params xs |> Result.map (fun xs' -> Destruct ps :: xs'))
-  | _ -> Error "Invalid param"
-
 let rec zip_optional_params params args =
   let open Utils.LetSyntax.Result in
   match (params, args) with
   | [], [] -> Ok []
   | [], _ :: _ -> Error `Arity
-  | Param name :: rest_params, [] ->
+  | Symbol name :: rest_params, [] ->
       let+ rest = zip_optional_params rest_params [] in
       (name, List []) :: rest
-  | Param name :: rest_params, arg :: rest_args ->
+  | Symbol name :: rest_params, arg :: rest_args ->
       let+ rest = zip_optional_params rest_params rest_args in
       (name, arg) :: rest
   | _ -> Error `OptionalParam
 
+let rec kw_args_to_map =
+  let open Utils.LetSyntax.Result in
+  function
+  | [] -> Ok StringMap.empty
+  | Symbol kw :: value :: args ->
+      let+ rest = kw_args_to_map args in
+      StringMap.add kw value rest
+  | _ -> Error `Kw
+
+let rec zip_kw_args params args_map =
+  let open Utils.LetSyntax.Result in
+  match params with
+  | [] -> Ok []
+  | Symbol param :: params' ->
+      let value =
+        match StringMap.find_opt param args_map with
+        | None -> List []
+        | Some value -> value
+      in
+      let* rest = zip_kw_args params' args_map in
+      Ok ((param, value) :: rest)
+  | _ -> Error `Kw
+
 let rec zip_params params args =
   let open Utils.LetSyntax.Result in
   match (params, args) with
-  | Param "&rest" :: Param name :: _, args -> Ok [ (name, List args) ]
-  | Param "&opt" :: params, args -> zip_optional_params params args
-  | Destruct params :: rest_params, List args :: rest_args ->
+  | Symbol "&rest" :: Symbol name :: _, args -> Ok [ (name, List args) ]
+  | Symbol "&opt" :: params, args -> zip_optional_params params args
+  | Symbol "&key" :: params, args ->
+      let* args_map = kw_args_to_map args in
+      zip_kw_args params args_map
+  | List params :: rest_params, List args :: rest_args ->
       let* p = zip_params params args in
       let+ p' = zip_params rest_params rest_args in
       List.append p p'
-  | Destruct _ :: _, _ -> Error `Destructuring
+  | List _ :: _, _ -> Error `Destructuring
   | [], [] -> Ok []
   | [], _ :: _ | _ :: _, [] -> Error `Arity
-  | Param name :: rest_params, arg :: rest_args ->
+  | Symbol name :: rest_params, arg :: rest_args ->
       let+ rest = zip_params rest_params rest_args in
       (name, arg) :: rest
+  | _ -> Error `Invalid_arg
+
+let args_err_of_string ~ctx ~args = function
+  | `Arity -> arity_error_msg ctx args
+  | `Destructuring -> "destructuring error"
+  | `OptionalParam -> "optional parameter syntax error"
+  | `Invalid_arg -> "optional parameter syntax error"
+  | `Kw -> "Keword arguments error"
 
 let parse_file filename =
   let ch = open_in filename in
@@ -266,9 +289,7 @@ and eval_application forms =
   | [] -> return (List [])
   | Lambda (scope_env, params, body) :: args -> (
       match zip_params params args with
-      | Error `Arity -> fail @@ arity_error_msg "lambda" args
-      | Error `Destructuring -> fail "destructuring error"
-      | Error `OptionalParam -> fail "optional parameter syntax error"
+      | Error err -> fail @@ args_err_of_string ~ctx:"lambda" ~args err
       | Ok bindings ->
           with_env @@ fun env ->
           let env' = shadow_env env scope_env |> bind_all bindings in
@@ -312,14 +333,11 @@ and eval expr =
       | _ -> fail @@ arity_error_msg "def" args)
   | List (Symbol "defmacro" :: args) -> (
       match args with
-      | [ Symbol name; List params; body ] -> (
-          match extract_params params with
-          | Error _ -> fail "Parsing error in defmacro: params must be symbols"
-          | Ok params_values ->
-              let* env = get_env in
-              let macro = Macro (params_values, body) in
-              let* () = put_env (StringMap.add name macro env) in
-              return (List []))
+      | [ Symbol name; List params; body ] ->
+          let* env = get_env in
+          let macro = Macro (params, body) in
+          let* () = put_env (StringMap.add name macro env) in
+          return (List [])
       | _ -> fail @@ arity_error_msg "defmacro" args)
   | List (Symbol "do" :: args) -> (
       let+ values = traverse eval args in
@@ -329,22 +347,16 @@ and eval expr =
   | List (Symbol "cond" :: args) -> eval_cond args
   | List (Symbol "lambda" :: args) -> (
       match args with
-      | [ List values; body ] -> (
-          match extract_params values with
-          | Error _ -> fail "Parsing error in lambda: params must be symbols"
-          | Ok params' ->
-              let+ env = get_env in
-              Lambda (env, params', body))
+      | [ List values; body ] ->
+          let+ env = get_env in
+          Lambda (env, values, body)
       | _ -> fail "Parsing error in lambda")
   | List (Symbol op :: args as forms) -> (
       let* env = get_env in
       match StringMap.find_opt op env with
       | Some (Macro (params, body)) -> (
           match zip_params params args with
-          | Error `Arity -> fail @@ arity_error_msg op args
-          | Error `Destructuring -> fail "destructuring error in macro"
-          | Error `OptionalParam ->
-              fail "optional parameter syntax error in macro"
+          | Error err -> fail @@ args_err_of_string ~ctx:"macro" ~args err
           | Ok bindings ->
               let* env = get_env in
               let* () = put_env (env |> bind_all bindings) in
