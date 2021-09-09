@@ -1,52 +1,7 @@
 open Value
+open Utils
 
 let shadow_env env env' = StringMap.union (fun _ _ y -> Some y) env env'
-
-let rec pred_all mapper = function
-  | [] -> Ok []
-  | x :: xs -> (
-      match mapper x with
-      | Error e -> Error e
-      | Ok x' -> pred_all mapper xs |> Result.map (fun xs' -> x' :: xs'))
-
-let char_list = function
-  | List [] -> None
-  | List exprs -> (
-      match pred_all (function Char s -> Ok s | e -> Error e) exprs with
-      | Ok chars -> Some chars
-      | Error _ -> None)
-  | _ -> None
-
-let rec value_to_string expr =
-  match char_list expr with
-  | Some chars -> "\"" ^ Utils.string_of_chars chars ^ "\""
-  | _ -> (
-      match expr with
-      | Symbol str -> str
-      | Number n -> string_of_float n
-      | Char ch -> "#\'" ^ Char.escaped ch ^ "'"
-      | List [] -> "nil"
-      | List exprs ->
-          "(" ^ (exprs |> List.map value_to_string |> String.concat " ") ^ ")"
-      | Native _ -> "[[Native function]]"
-      | Lambda _ -> "[[Lambda]]")
-
-let env_to_string (env : env) =
-  let body =
-    StringMap.bindings env
-    |> List.map (fun (name, value) ->
-           name ^ ": "
-           ^
-           match value with
-           | Value value -> value_to_string value
-           | Macro (_, _) -> "[[Macro]]")
-    |> String.concat ", "
-  in
-  "{ " ^ body ^ " }"
-
-let arity_error_msg label args =
-  let n = Int.to_string (List.length args) in
-  "Wrong number of args (" ^ n ^ ") passed to " ^ label
 
 let bind_all bindings env =
   bindings
@@ -56,81 +11,7 @@ let bind_all bindings env =
 
 let truthy = function Symbol "true" -> true | _ -> false
 
-module Prelude : sig
-  val env : env
-end = struct
-  let nil = List []
-
-  let vbool b = if b then Symbol "true" else nil
-
-  let plus values =
-    match pred_all (function Number s -> Ok s | e -> Error e) values with
-    | Ok nums -> Ok (Number (List.fold_left ( +. ) 0. nums))
-    | Error _ -> Error "Sum expects numbers as arguments"
-
-  let println values =
-    values |> List.map value_to_string |> String.concat " " |> print_endline;
-    Ok (List [])
-
-  let eq = function
-    | [ List []; List [] ] -> Ok (vbool true)
-    | [ Symbol x; Symbol y ] when x = y -> Ok (vbool true)
-    | [ Number x; Number y ] when x = y -> Ok (vbool true)
-    | [ Char x; Char y ] when x = y -> Ok (vbool true)
-    | [ _; _ ] -> Ok (vbool false)
-    | args -> Error (arity_error_msg "=" args)
-
-  let head = function
-    | [ List (hd :: _) ] -> Ok hd
-    | [ _ ] -> Ok nil
-    | args -> Error (arity_error_msg "head" args)
-
-  let tail = function
-    | [ List (_ :: tl) ] -> Ok (List tl)
-    | [ _ ] -> Ok nil
-    | args -> Error (arity_error_msg "tail" args)
-
-  let cons = function
-    | [ x; List xs ] -> Ok (List (x :: xs))
-    | [ _; _ ] -> Error "Cons: the second argument is expected to be a list"
-    | args -> Error (arity_error_msg "cons" args)
-
-  let is_atom = function
-    | [ List [] ] | [ Symbol _ ] | [ Number _ ] | [ Char _ ] -> Ok (vbool true)
-    | [ _ ] -> Ok (vbool false)
-    | args -> Error (arity_error_msg "atom?" args)
-
-  let make_string str =
-    List (List.map (fun ch -> Char ch) @@ Utils.chars_of_string str)
-
-  let tag = function
-    | List _ -> "list"
-    | Char _ -> "char"
-    | Number _ -> "number"
-    | Symbol _ -> "symbol"
-    | Lambda _ -> "closure"
-    | Native _ -> "function"
-
-  let type_of = function
-    | [ arg ] -> Ok (make_string (tag arg))
-    | args -> Error (arity_error_msg "type-of" args)
-
-  let env =
-    StringMap.empty
-    |> bind_all
-         [
-           ("atom?", Native is_atom);
-           ("+", Native plus);
-           ("=", Native eq);
-           ("head", Native head);
-           ("tail", Native tail);
-           ("cons", Native cons);
-           ("println", Native println);
-           ("type-of", Native type_of);
-         ]
-end
-
-let initial_env = Prelude.env
+let initial_env = bind_all Prelude.env StringMap.empty
 
 module State = struct
   type 'a t = State of (env -> (env * 'a, string) result)
@@ -277,7 +158,7 @@ and eval_application forms =
           eval body)
   | Native nf :: args -> (
       match nf args with Ok r -> return r | Error e -> fail e)
-  | v :: _ -> fail (value_to_string v ^ " is not a function")
+  | v :: _ -> fail (Value.to_string v ^ " is not a function")
 
 and eval value =
   let open State in
@@ -294,7 +175,7 @@ and eval value =
       let* path = eval path_symbol in
       match char_list path with
       | None ->
-          fail @@ "require path must be a string, got <" ^ value_to_string path
+          fail @@ "require path must be a string, got <" ^ Value.to_string path
           ^ "> instead"
       | Some chars ->
           let* backup_env = get_env in
@@ -359,7 +240,7 @@ let run env value = State.run (eval value) env
 let run_all ?(debug_read = false) env values =
   if debug_read then (
     print_string "=> ";
-    values |> List.map value_to_string |> String.concat " " |> print_endline)
+    values |> List.map Value.to_string |> String.concat " " |> print_endline)
   else ();
   State.run (State.traverse eval values) env
 
