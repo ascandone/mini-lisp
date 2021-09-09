@@ -7,9 +7,9 @@ module Make (Ctx : Ctx) = struct
 
   let run (State run) = run
 
-  let get_env = State (fun ctx -> Ok (ctx, ctx))
+  let get_ctx = State (fun ctx -> Ok (ctx, ctx))
 
-  let put_env ctx = State (fun _ -> Ok (ctx, ()))
+  let put_ctx ctx = State (fun _ -> Ok (ctx, ()))
 
   let return x = State (fun ctx -> Ok (ctx, x))
 
@@ -18,21 +18,25 @@ module Make (Ctx : Ctx) = struct
   let map f (State runState) =
     let open Utils.LetSyntax.Result in
     State
-      (fun env ->
-        let+ env, x = runState env in
-        (env, f x))
+      (fun ctx ->
+        let+ ctx, x = runState ctx in
+        (ctx, f x))
 
   let bind (State runState) f =
     let open Utils.LetSyntax.Result in
     State
-      (fun env ->
-        let* env, x = runState env in
+      (fun ctx ->
+        let* ctx, x = runState ctx in
         let (State runState') = f x in
-        runState' env)
+        runState' ctx)
 
   let ( let+ ) state f = map f state
 
   let ( let* ) = bind
+
+  let update_ctx f =
+    let* ctx = get_ctx in
+    put_ctx (f ctx)
 
   (* let ( >>= ) = bind *)
 
