@@ -16,14 +16,19 @@ module Make (Ctx : Ctx) = struct
   let fail reason = State (fun _ -> Error reason)
 
   let map f (State runState) =
-    State (fun env -> runState env |> Result.map (fun (env, x) -> (env, f x)))
-
-  let bind (State runState) f =
+    let open Utils.LetSyntax.Result in
     State
       (fun env ->
-        Result.bind (runState env) (fun (env, x) ->
-            let (State runState') = f x in
-            runState' env))
+        let+ env, x = runState env in
+        (env, f x))
+
+  let bind (State runState) f =
+    let open Utils.LetSyntax.Result in
+    State
+      (fun env ->
+        let* env, x = runState env in
+        let (State runState') = f x in
+        runState' env)
 
   let ( let+ ) state f = map f state
 
