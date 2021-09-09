@@ -1,6 +1,10 @@
 open Value
 open Utils
 
+module State = State.Make (struct
+  type t = env
+end)
+
 let shadow_env env env' = StringMap.union (fun _ _ y -> Some y) env env'
 
 let bind_all bindings env =
@@ -12,43 +16,6 @@ let bind_all bindings env =
 let truthy = function Symbol "true" -> true | _ -> false
 
 let initial_env = bind_all Prelude.env StringMap.empty
-
-module State = struct
-  type 'a t = State of (env -> (env * 'a, string) result)
-
-  let run (State run) = run
-
-  let get_env = State (fun env -> Ok (env, env))
-
-  let put_env env = State (fun _ -> Ok (env, ()))
-
-  let return x = State (fun env -> Ok (env, x))
-
-  let fail reason = State (fun _ -> Error reason)
-
-  let map f (State runState) =
-    State (fun env -> runState env |> Result.map (fun (env, x) -> (env, f x)))
-
-  let bind (State runState) f =
-    State
-      (fun env ->
-        Result.bind (runState env) (fun (env, x) ->
-            let (State runState') = f x in
-            runState' env))
-
-  let ( let+ ) state f = map f state
-
-  let ( let* ) = bind
-
-  (* let ( >>= ) = bind *)
-
-  let rec traverse f = function
-    | [] -> return []
-    | x :: xs ->
-        let* x' = f x in
-        let+ xs' = traverse f xs in
-        x' :: xs'
-end
 
 let rec zip_optional_params params args =
   let open Utils.LetSyntax.Result in
