@@ -46,8 +46,8 @@ module State = struct
     | [] -> return []
     | x :: xs ->
         let* x' = f x in
-        let* xs' = traverse f xs in
-        return (x' :: xs')
+        let+ xs' = traverse f xs in
+        x' :: xs'
 end
 
 let rec zip_optional_params params args =
@@ -82,8 +82,8 @@ let rec zip_kw_args params args_map =
         | None -> List []
         | Some value -> value
       in
-      let* rest = zip_kw_args params' args_map in
-      Ok ((param, value) :: rest)
+      let+ rest = zip_kw_args params' args_map in
+      (param, value) :: rest
   | _ -> Error `Kw
 
 let rec zip_params params args =
@@ -123,8 +123,8 @@ let with_env f =
   let open State in
   let* backup_env = get_env in
   let* res = f backup_env in
-  let* () = put_env backup_env in
-  return res
+  let+ () = put_env backup_env in
+  res
 
 let rec quote_value value =
   let open State in
@@ -182,15 +182,15 @@ and eval value =
           let* () = put_env initial_env in
           let* _ = eval_file (Utils.string_of_chars chars) in
           let* file_env = get_env in
-          let* () = put_env (shadow_env backup_env file_env) in
-          return (List []))
+          let+ () = put_env (shadow_env backup_env file_env) in
+          List [])
   | List (Symbol "def" :: args) -> (
       match args with
       | [ Symbol name; form ] ->
           let* value = eval form in
           let* env = get_env in
-          let* () = put_env (StringMap.add name (Value value) env) in
-          return (List [])
+          let+ () = put_env (StringMap.add name (Value value) env) in
+          List []
       | _ -> fail @@ arity_error_msg "def" args)
   | List (Symbol "defmacro" :: args) -> (
       match args with
