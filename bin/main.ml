@@ -5,7 +5,7 @@ open Lib
    let concat xs = List.fold_right (fun x y -> app y x) xs [] *)
 
 module Repl : sig
-  val run : Eval.env -> unit
+  val run : Value.env -> unit
 end = struct
   let evalute_results exprs env =
     match Eval.run_all ~debug_read:false env exprs with

@@ -1,26 +1,6 @@
-module StringMap = Map.Make (String)
-
-type env_item = Value of value | Macro of value list * value
-
-and value =
-  | Number of float
-  | Symbol of string
-  | Char of char
-  | List of value list
-  | Native of native_function
-  | Lambda of (env * value list * value)
-
-and native_function = value list -> (value, string) result
-
-and env = env_item StringMap.t
+open Value
 
 let shadow_env env env' = StringMap.union (fun _ _ y -> Some y) env env'
-
-let rec lift_sexpr = function
-  | Sexpr.Number n -> Number n
-  | Sexpr.Symbol s -> Symbol s
-  | Sexpr.Char ch -> Char ch
-  | Sexpr.List l -> List (List.map lift_sexpr l)
 
 let rec pred_all mapper = function
   | [] -> Ok []
@@ -299,10 +279,10 @@ and eval_application forms =
       match nf args with Ok r -> return r | Error e -> fail e)
   | v :: _ -> fail (value_to_string v ^ " is not a function")
 
-and eval expr =
+and eval value =
   let open State in
-  match expr with
-  | Native _ | Lambda _ | Char _ | Number _ -> return expr
+  match value with
+  | Native _ | Lambda _ | Char _ | Number _ -> return value
   | Symbol s -> (
       let* env = get_env in
       match StringMap.find_opt s env with
@@ -371,13 +351,12 @@ and eval_file path =
   match parse_file path with
   | Error e -> fail ("Parsing error: " ^ e)
   | Ok exprs ->
-      let+ _ = traverse eval (List.map lift_sexpr exprs) in
+      let+ _ = traverse eval exprs in
       List []
 
-let run env expr = State.run (eval (lift_sexpr expr)) env
+let run env value = State.run (eval value) env
 
-let run_all ?(debug_read = false) env exprs =
-  let values = exprs |> List.map lift_sexpr in
+let run_all ?(debug_read = false) env values =
   if debug_read then (
     print_string "=> ";
     values |> List.map value_to_string |> String.concat " " |> print_endline)

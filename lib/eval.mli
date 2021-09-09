@@ -1,16 +1,15 @@
-type value
+val env_to_string : Value.env -> string
 
-type env
-
-val env_to_string : env -> string
-
-val run : env -> Sexpr.t -> (env * value, string) result
+val run : Value.env -> Value.t -> (Value.env * Value.t, string) result
 
 val run_all :
-  ?debug_read:bool -> env -> Sexpr.t list -> (env * value list, string) result
+  ?debug_read:bool ->
+  Value.env ->
+  Value.t list ->
+  (Value.env * Value.t list, string) result
 
-val initial_env : env
+val initial_env : Value.env
 
-val value_to_string : value -> string
+val value_to_string : Value.t -> string
 
-val run_file : string -> (env * value, string) result
+val run_file : string -> (Value.env * Value.t, string) result

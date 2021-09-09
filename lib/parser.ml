@@ -1,6 +1,5 @@
 open Angstrom
-open Sexpr
-
+open Value
 (* consts *)
 
 let quote_symbol = "'"
@@ -104,10 +103,7 @@ let rec expr_p ~backquoted =
          option true (string unquote_symbol *> whitespace *> return false)
        in
        let+ value = expr_p ~backquoted in
-       if backquoted then
-         match value with
-         | Number _ | Symbol _ | Char _ -> quote value
-         | List _ -> value
+       if backquoted then match value with List _ -> value | _ -> quote value
        else value);
     ]
 
