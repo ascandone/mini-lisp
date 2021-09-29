@@ -25,11 +25,6 @@
       ~b ~x
       otherwise ~y))
 
-(defmacro not (x)
-  `(if ~x
-    false
-    true))
-
 (defmacro and (x y)
   `(if ~x
     ~y
@@ -42,6 +37,11 @@
 
 (defmacro defun (name params body)
   `(def ~name (lambda ~params ~body)))
+
+(defun not (x)
+  (if x
+    false
+    true))
 
 (defun second (lst)
   (head (tail lst)))
