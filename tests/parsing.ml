@@ -1,19 +1,47 @@
+(* TEMP *)
+[@@@warning "-32"]
+
 open Lib
+open Value
 
 let value = Alcotest.testable (Fmt.of_to_string Value.to_string) Value.equal
 
-let check_parse msg s1 s2 =
-  Alcotest.(check (result (list value) string))
-    msg (Parser.run s1) (Parser.run s2)
+let check_parse ~msg ~source ~expected =
+  Alcotest.(check' (result (list value) string))
+    ~msg
+    ~expected:(Ok [ expected ])
+    ~actual:(Parser.run source)
+
+(* Number *)
+
+let test_int () =
+  check_parse ~msg:"\"0\" should be parsed a literal" ~source:"0"
+    ~expected:(Number 0.)
+
+let test_int_2 () =
+  check_parse ~msg:"\"42\" should be parsed a literal" ~source:"42"
+    ~expected:(Number 42.)
+
+let test_float () =
+  check_parse ~msg:"\"1.234\" should be parsed a literal" ~source:"1.234"
+    ~expected:(Number 1.234)
+
+(* Strings *)
+
+let test_string_literal () =
+  check_parse ~msg:"the string syntax sugar should be parsed as a list of chars"
+    ~source:{| "ab" |}
+    ~expected:(List [ Symbol "quote"; List [ Char 'a'; Char 'b' ] ])
 
 let () =
   let open Alcotest in
-  run "Utils"
+  run "Parsing"
     [
-      ( "parsing",
+      ( "number",
         [
-          test_case "Lower case" `Quick (fun () ->
-              check_parse "string syntax sugar"
-                {| '(#'h' #'e' #'l' #'l' #'o') |} {| "hello" |});
+          test_case "int" `Quick test_int;
+          test_case "int" `Quick test_int_2;
+          (* test_case "float" `Quick test_float; *)
         ] );
+      ("string", [ test_case "string syntax" `Quick test_string_literal ]);
     ]
