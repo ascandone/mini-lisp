@@ -20,7 +20,15 @@ let () =
   let open Alcotest in
   run
     "Eval"
-    [ ( "special forms"
+    [ ( "constants"
+      , [ test_case "num" `Quick (fun () ->
+              check_eval ~msg:"number" ~actual:{| 0 |} ~expected:{| 0 |})
+        ; test_case "nil" `Quick (fun () ->
+              check_eval ~msg:"nil" ~actual:{| () |} ~expected:{| () |})
+        ; test_case "nil" `Quick (fun () ->
+              check_eval ~msg:"nil" ~actual:{| '() |} ~expected:{| () |})
+        ] )
+    ; ( "special forms"
       , [ test_case "def" `Quick (fun () ->
               check_eval ~msg:"def" ~actual:{| (def x 42) x |} ~expected:{| 42 |})
         ; test_case "lambda" `Quick (fun () ->
