@@ -25,8 +25,12 @@ let () =
               check_eval ~msg:"number" ~actual:{| 0 |} ~expected:{| 0 |})
         ; test_case "nil" `Quick (fun () ->
               check_eval ~msg:"nil" ~actual:{| () |} ~expected:{| () |})
-        ; test_case "nil" `Quick (fun () ->
+        ] )
+    ; ( "quoted"
+      , [ test_case "nil" `Quick (fun () ->
               check_eval ~msg:"nil" ~actual:{| '() |} ~expected:{| () |})
+        ; test_case "nonempty list" `Quick (fun () ->
+              check_eval ~msg:"nil" ~actual:{| '(x y z) |} ~expected:{| (x y z) |})
         ] )
     ; ( "special forms"
       , [ test_case "def" `Quick (fun () ->
