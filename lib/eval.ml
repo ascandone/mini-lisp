@@ -149,7 +149,12 @@ and eval value =
     | Some (Value value) -> return value
     | Some (Macro (_, _)) -> fail "Can't take value of a macro"
     | None -> fail ("unbound value: " ^ s))
-  | List (Symbol "require" :: path_symbol :: _) ->
+  | List values -> eval_form values
+
+and eval_form forms =
+  let open State in
+  match forms with
+  | Symbol "require" :: path_symbol :: _ ->
     (* TODO import selection  *)
     let* path = eval path_symbol in
     (match char_list path with
@@ -162,7 +167,7 @@ and eval value =
       let* file_env = get_ctx in
       let+ () = put_ctx (shadow_env backup_env file_env) in
       List [])
-  | List (Symbol "def" :: args) ->
+  | Symbol "def" :: args ->
     (match args with
     | [ Symbol name; form ] ->
       let* value = eval form in
@@ -170,7 +175,7 @@ and eval value =
       let+ () = put_ctx (StringMap.add name (Value value) env) in
       List []
     | _ -> fail @@ arity_error_msg "def" args)
-  | List (Symbol "defmacro" :: args) ->
+  | Symbol "defmacro" :: args ->
     (match args with
     | [ Symbol name; List params; body ] ->
       let* env = get_ctx in
@@ -178,23 +183,23 @@ and eval value =
       let* () = put_ctx (StringMap.add name macro env) in
       return (List [])
     | _ -> fail @@ arity_error_msg "defmacro" args)
-  | List (Symbol "do" :: args) ->
+  | Symbol "do" :: args ->
     let+ values = traverse eval args in
     (match List.rev values with
     | [] -> List []
     | last :: _ -> last)
-  | List (Symbol "quote" :: args) ->
+  | Symbol "quote" :: args ->
     (match args with
     | [ arg ] -> quote_value arg
     | _ -> fail "Arity error")
-  | List (Symbol "cond" :: args) -> eval_cond args
-  | List (Symbol "lambda" :: args) ->
+  | Symbol "cond" :: args -> eval_cond args
+  | Symbol "lambda" :: args ->
     (match args with
     | [ List values; body ] ->
       let+ env = get_ctx in
       Lambda (env, values, body)
     | _ -> fail "Parsing error in lambda")
-  | List (Symbol op :: args as forms) ->
+  | Symbol op :: args as forms ->
     let* env = get_ctx in
     (match StringMap.find_opt op env with
     | Some (Macro (params, body)) ->
@@ -207,7 +212,7 @@ and eval value =
         let* () = put_ctx env in
         eval value)
     | _ -> eval_application forms)
-  | List forms -> eval_application forms
+  | _ -> eval_application forms
 
 and eval_file path =
   let open State in
