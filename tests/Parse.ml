@@ -2,12 +2,9 @@
 [@@@warning "-32"]
 
 open Lib
-open Value
-
-let value = Alcotest.testable (Fmt.of_to_string Value.to_string) Value.equal
 
 let check_parse ~msg ~source ~expected =
-  Alcotest.(check' (result (list value) string))
+  Alcotest.(check' (result (list Testable.value) string))
     ~msg
     ~expected:(Ok [ expected ])
     ~actual:(Parser.run source)
