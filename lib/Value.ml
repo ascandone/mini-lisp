@@ -55,3 +55,11 @@ let env_to_string (env : env) =
     |> String.concat ", "
   in
   "{ " ^ body ^ " }"
+
+let rec equal v1 v2 =
+  match (v1, v2) with
+  | Number x, Number y -> x == y
+  | Symbol x, Symbol y -> x == y
+  | Char x, Char y -> x == y
+  | List x, List y -> List.equal equal x y
+  | _ -> false

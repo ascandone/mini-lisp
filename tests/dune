@@ -1,0 +1,5 @@
+(tests
+ (names parsing)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq))
+ (libraries alcotest lib))
