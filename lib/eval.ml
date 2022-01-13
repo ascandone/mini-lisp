@@ -88,9 +88,9 @@ let parse_file filename =
 
 let with_env f =
   let open State in
-  let* backup_env = get_env in
+  let* backup_env = get_ctx in
   let* res = f backup_env in
-  let+ () = put_env backup_env in
+  let+ () = put_ctx backup_env in
   res
 
 let rec quote_value value =
@@ -121,7 +121,7 @@ and eval_application forms =
       | Ok bindings ->
           with_env @@ fun env ->
           let env' = shadow_env env scope_env |> bind_all bindings in
-          let* () = put_env env' in
+          let* () = put_ctx env' in
           eval body)
   | Native nf :: args -> (
       match nf args with Ok r -> return r | Error e -> fail e)
@@ -132,7 +132,7 @@ and eval value =
   match value with
   | Native _ | Lambda _ | Char _ | Number _ -> return value
   | Symbol s -> (
-      let* env = get_env in
+      let* env = get_ctx in
       match StringMap.find_opt s env with
       | Some (Value value) -> return value
       | Some (Macro (_, _)) -> fail "Can't take value of a macro"
@@ -145,26 +145,26 @@ and eval value =
           fail @@ "require path must be a string, got <" ^ Value.to_string path
           ^ "> instead"
       | Some chars ->
-          let* backup_env = get_env in
-          let* () = put_env initial_env in
+          let* backup_env = get_ctx in
+          let* () = put_ctx initial_env in
           let* _ = eval_file (Utils.string_of_chars chars) in
-          let* file_env = get_env in
-          let+ () = put_env (shadow_env backup_env file_env) in
+          let* file_env = get_ctx in
+          let+ () = put_ctx (shadow_env backup_env file_env) in
           List [])
   | List (Symbol "def" :: args) -> (
       match args with
       | [ Symbol name; form ] ->
           let* value = eval form in
-          let* env = get_env in
-          let+ () = put_env (StringMap.add name (Value value) env) in
+          let* env = get_ctx in
+          let+ () = put_ctx (StringMap.add name (Value value) env) in
           List []
       | _ -> fail @@ arity_error_msg "def" args)
   | List (Symbol "defmacro" :: args) -> (
       match args with
       | [ Symbol name; List params; body ] ->
-          let* env = get_env in
+          let* env = get_ctx in
           let macro = Macro (params, body) in
-          let* () = put_env (StringMap.add name macro env) in
+          let* () = put_ctx (StringMap.add name macro env) in
           return (List [])
       | _ -> fail @@ arity_error_msg "defmacro" args)
   | List (Symbol "do" :: args) -> (
@@ -176,20 +176,20 @@ and eval value =
   | List (Symbol "lambda" :: args) -> (
       match args with
       | [ List values; body ] ->
-          let+ env = get_env in
+          let+ env = get_ctx in
           Lambda (env, values, body)
       | _ -> fail "Parsing error in lambda")
   | List (Symbol op :: args as forms) -> (
-      let* env = get_env in
+      let* env = get_ctx in
       match StringMap.find_opt op env with
       | Some (Macro (params, body)) -> (
           match zip_params params args with
           | Error err -> fail @@ args_err_of_string ~ctx:"macro" ~args err
           | Ok bindings ->
-              let* env = get_env in
-              let* () = put_env (env |> bind_all bindings) in
+              let* env = get_ctx in
+              let* () = put_ctx (env |> bind_all bindings) in
               let* value = eval body in
-              let* () = put_env env in
+              let* () = put_ctx env in
               eval value)
       | _ -> eval_application forms)
   | List forms -> eval_application forms
