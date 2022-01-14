@@ -109,8 +109,9 @@ let rec quote_value value =
     let+ list = traverse quote_value values in
     List list
   | _ -> return value
+;;
 
-and eval_cond =
+let rec eval_cond =
   let open State in
   function
   | [] -> return (List [])
