@@ -10,7 +10,7 @@ and t =
   | Char of char
   | List of t list
   | Native of native_function
-  | Lambda of (env * t list * t)
+  | Closure of (env * t list * t)
 
 and native_function = t list -> (t, string) result
 
@@ -50,7 +50,7 @@ let rec to_string expr =
     | List [] -> "nil"
     | List exprs -> "(" ^ (exprs |> List.map to_string |> String.concat " ") ^ ")"
     | Native _ -> "[[Native function]]"
-    | Lambda _ -> "[[Lambda]]")
+    | Closure _ -> "[[Lambda]]")
 ;;
 
 let env_to_string (env : env) =

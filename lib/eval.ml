@@ -111,6 +111,35 @@ let rec quote_value value =
   | _ -> return value
 ;;
 
+type special_form =
+  | Require
+  | Def
+  | Defmacro
+  | Do
+  | Quote
+  | Cond
+  | Lambda
+
+type form =
+  | SpecialForm of (special_form * Value.t list)
+  | Nil
+  | Application of (Value.t * Value.t list)
+
+let parse_form values =
+  match values with
+  | [] -> Nil
+  | hd :: tl ->
+    (match hd with
+    | Symbol "require" -> SpecialForm (Require, tl)
+    | Symbol "def" -> SpecialForm (Def, tl)
+    | Symbol "defmacro" -> SpecialForm (Defmacro, tl)
+    | Symbol "do" -> SpecialForm (Do, tl)
+    | Symbol "quote" -> SpecialForm (Quote, tl)
+    | Symbol "cond" -> SpecialForm (Cond, tl)
+    | Symbol "lambda" -> SpecialForm (Lambda, tl)
+    | _ -> Application (hd, tl))
+;;
+
 let rec eval_cond =
   let open State in
   function
@@ -120,12 +149,12 @@ let rec eval_cond =
     if truthy b_value then eval y else eval_cond rest
   | _ -> fail "Uneven clauses in cond"
 
-and eval_application forms =
+and eval_application (op_unevaluated, args_unevaluated) =
   let open State in
-  let* values = traverse eval forms in
-  match values with
-  | [] -> return (List [])
-  | Lambda (scope_env, params, body) :: args ->
+  let* op_value = eval op_unevaluated in
+  let* args = traverse eval args_unevaluated in
+  match op_value with
+  | Closure (scope_env, params, body) ->
     (match zip_params params args with
     | Error err -> fail @@ args_err_of_string ~ctx:"lambda" ~args err
     | Ok bindings ->
@@ -134,16 +163,16 @@ and eval_application forms =
       let env' = shadow_env env scope_env |> bind_all bindings in
       let* () = put_ctx env' in
       eval body)
-  | Native nf :: args ->
+  | Native nf ->
     (match nf args with
     | Ok r -> return r
     | Error e -> fail e)
-  | v :: _ -> fail (Value.to_string v ^ " is not a function")
+  | _ -> fail (Value.to_string op_value ^ " is not a function")
 
 and eval value =
   let open State in
   match value with
-  | Native _ | Lambda _ | Char _ | Number _ -> return value
+  | Native _ | Closure _ | Char _ | Number _ -> return value
   | Symbol s ->
     let* env = get_ctx in
     (match StringMap.find_opt s env with
@@ -152,10 +181,30 @@ and eval value =
     | None -> fail ("unbound value: " ^ s))
   | List values -> eval_form values
 
-and eval_form forms =
+and eval_form values =
   let open State in
-  match forms with
-  | Symbol "require" :: path_symbol :: _ ->
+  match parse_form values with
+  | SpecialForm data -> eval_special_form data
+  | Nil -> return (List [])
+  | Application (Symbol op, args) ->
+    let* env = get_ctx in
+    (match StringMap.find_opt op env with
+    | Some (Macro (params, body)) ->
+      (match zip_params params args with
+      | Error err -> fail @@ args_err_of_string ~ctx:"macro" ~args err
+      | Ok bindings ->
+        let* env = get_ctx in
+        let* () = put_ctx (env |> bind_all bindings) in
+        let* value = eval body in
+        let* () = put_ctx env in
+        eval value)
+    | _ -> eval_application (Symbol op, args))
+  | Application data -> eval_application data
+
+and eval_special_form special_form =
+  let open State in
+  match special_form with
+  | Require, [ path_symbol ] ->
     (* TODO import selection  *)
     let* path = eval path_symbol in
     (match char_list path with
@@ -168,7 +217,8 @@ and eval_form forms =
       let* file_env = get_ctx in
       let+ () = put_ctx (shadow_env backup_env file_env) in
       List [])
-  | Symbol "def" :: args ->
+  | Require, _ -> failwith "invalid require"
+  | Def, args ->
     (match args with
     | [ Symbol name; form ] ->
       let* value = eval form in
@@ -176,7 +226,7 @@ and eval_form forms =
       let+ () = put_ctx (StringMap.add name (Value value) env) in
       List []
     | _ -> fail @@ arity_error_msg "def" args)
-  | Symbol "defmacro" :: args ->
+  | Defmacro, args ->
     (match args with
     | [ Symbol name; List params; body ] ->
       let* env = get_ctx in
@@ -184,36 +234,22 @@ and eval_form forms =
       let* () = put_ctx (StringMap.add name macro env) in
       return (List [])
     | _ -> fail @@ arity_error_msg "defmacro" args)
-  | Symbol "do" :: args ->
+  | Do, args ->
     let+ values = traverse eval args in
     (match List.rev values with
     | [] -> List []
     | last :: _ -> last)
-  | Symbol "quote" :: args ->
+  | Quote, args ->
     (match args with
     | [ arg ] -> quote_value arg
     | _ -> fail "Arity error")
-  | Symbol "cond" :: args -> eval_cond args
-  | Symbol "lambda" :: args ->
+  | Cond, args -> eval_cond args
+  | Lambda, args ->
     (match args with
     | [ List values; body ] ->
       let+ env = get_ctx in
-      Lambda (env, values, body)
+      Closure (env, values, body)
     | _ -> fail "Parsing error in lambda")
-  | Symbol op :: args as forms ->
-    let* env = get_ctx in
-    (match StringMap.find_opt op env with
-    | Some (Macro (params, body)) ->
-      (match zip_params params args with
-      | Error err -> fail @@ args_err_of_string ~ctx:"macro" ~args err
-      | Ok bindings ->
-        let* env = get_ctx in
-        let* () = put_ctx (env |> bind_all bindings) in
-        let* value = eval body in
-        let* () = put_ctx env in
-        eval value)
-    | _ -> eval_application forms)
-  | _ -> eval_application forms
 
 and eval_file path =
   let open State in

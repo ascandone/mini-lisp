@@ -61,7 +61,7 @@ let tag = function
   | Char _ -> "char"
   | Number _ -> "number"
   | Symbol _ -> "symbol"
-  | Lambda _ -> "closure"
+  | Closure _ -> "closure"
   | Native _ -> "function"
 ;;
 
