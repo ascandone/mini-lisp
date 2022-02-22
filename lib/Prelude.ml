@@ -16,6 +16,21 @@ let plus values =
   | Error _ -> Error "Sum expects numbers as arguments"
 ;;
 
+let div values =
+  match
+    pred_all
+      (function
+        | Number s -> Ok s
+        | e -> Error e)
+      values
+  with
+  | Ok nums ->
+    (match nums with
+    | hd :: tl -> Ok (Number (List.fold_left ( /. ) hd tl))
+    | [] -> Error "Wrong number of args (0) passed to div")
+  | Error _ -> Error "Div expects numbers as arguments"
+;;
+
 let println values =
   values |> List.map Value.to_string |> String.concat " " |> print_endline;
   Ok (List [])
@@ -73,6 +88,7 @@ let type_of = function
 let env =
   [ "atom?", Native is_atom
   ; "+", Native plus
+  ; "/", Native div
   ; "=", Native eq
   ; "head", Native head
   ; "tail", Native tail
