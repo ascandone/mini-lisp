@@ -16,6 +16,12 @@ let plus values =
   | Error _ -> Error "Sum expects numbers as arguments"
 ;;
 
+let lt values =
+  match values with
+  | [ Number n; Number n' ] -> Ok (if n < n' then Symbol "true" else Symbol "nil")
+  | _ -> Error "Invalid arguments"
+;;
+
 let div values =
   match
     pred_all
@@ -90,6 +96,7 @@ let env =
   ; "+", Native plus
   ; "/", Native div
   ; "=", Native eq
+  ; "<", Native lt
   ; "head", Native head
   ; "tail", Native tail
   ; "cons", Native cons

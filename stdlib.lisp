@@ -113,3 +113,15 @@
          (not (atom? x)))       (list-eq x y)
     
     otherwise                   false))
+
+(defun /= (x y)
+  (not (== x y)))
+
+(defun > (x y)
+  (< y x))
+
+(defun <= (x y)
+  (or (== x y) (< x y)))
+
+(defun >= (x y)
+  (or (== x y) (> x y)))
