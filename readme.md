@@ -52,6 +52,16 @@ false ; => nil
 (f 0 'x 1 'y 2) ; => (0 1 2)
 (f 0 'y 2) ; => (0 nil 2)
 (f 0) ; => (0 nil nil)
+
+; Destructuring
+(defun f ((x y z)) x)
+(f '(1 2 3)) ; => 1
+
+(defun f ((x)) x)
+(f '(1 2 3)) ; => ## Error: Wrong number of args (1) passed to lambda
+
+(defun f ((hd &rest tl)) (list hd tl))
+(f '(1 2 3)) ; => (1 (2 3))
 ```
 
 ### Macros
