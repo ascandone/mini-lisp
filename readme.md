@@ -36,6 +36,9 @@ false ; => nil
 
 ### Functions syntax sugar
 ```lisp
+;; (defun f params body) is actually sugar (via macro) for
+;; (def f (lambda params body)) 
+
 ; optional argument
 (defun f (a &option b) (list a b))
 (f 0) ; => (0 nil)
